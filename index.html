@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TSMP Tournament Maker</title>
+  <link rel="preconnect" href="https://mc-heads.net" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- animated grid + glow background -->
+  <div class="bg-grid" aria-hidden="true"></div>
+  <div class="bg-glow" aria-hidden="true"></div>
+
+  <!-- ===================== NAV ===================== -->
+  <header class="nav">
+    <div class="nav-inner">
+      <a class="brand" href="#" data-nav="setup">
+        <span class="brand-mark">⚔</span>
+        <span class="brand-text">TSMP<span class="brand-accent">Tournament</span></span>
+      </a>
+      <nav class="nav-links">
+        <button class="nav-link active" data-nav="setup">Setup</button>
+        <button class="nav-link" data-nav="bracket">Bracket</button>
+      </nav>
+      <button class="btn btn-ghost btn-sm" id="resetAll">Reset</button>
+    </div>
+  </header>
+
+  <main class="page">
+
+    <!-- ===================== SETUP VIEW ===================== -->
+    <section class="view" id="view-setup">
+      <div class="hero">
+        <span class="eyebrow">COMPETITIVE TOURNAMENT BUILDER</span>
+        <h1 class="hero-title">Build Your <span class="grad">Championship</span></h1>
+        <p class="hero-sub">Pick a bracket, choose your PvP mode, add your fighters, and generate a pro-grade tournament bracket in seconds.</p>
+      </div>
+
+      <div class="setup-grid">
+        <!-- LEFT: config -->
+        <div class="panel">
+          <h2 class="panel-title"><span class="num">1</span> Tournament Details</h2>
+          <label class="field">
+            <span class="field-label">Tournament Name</span>
+            <input type="text" id="tName" class="input" placeholder="Tempest Summer Championship" maxlength="48" />
+          </label>
+
+          <div class="field">
+            <span class="field-label">Bracket Type</span>
+            <div class="chip-row" id="bracketTypes">
+              <button class="chip active" data-bracket="single">
+                <span class="chip-title">Single Elimination</span>
+                <span class="chip-desc">One loss and you're out</span>
+              </button>
+              <button class="chip" data-bracket="double">
+                <span class="chip-title">Double Elimination</span>
+                <span class="chip-desc">Losers bracket second chance</span>
+              </button>
+              <button class="chip" data-bracket="roundrobin">
+                <span class="chip-title">Round Robin</span>
+                <span class="chip-desc">Everyone plays everyone</span>
+              </button>
+              <button class="chip" data-bracket="swiss">
+                <span class="chip-title">Swiss</span>
+                <span class="chip-desc">Paired by record, no elimination</span>
+              </button>
+              <button class="chip" data-bracket="groups">
+                <span class="chip-title">Group Stage</span>
+                <span class="chip-desc">Groups → main bracket playoff</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Swiss options -->
+          <div class="field sub-config hidden" id="swissConfig">
+            <span class="field-label">Swiss Rounds</span>
+            <div class="stepper">
+              <button class="step-btn" id="swissMinus" type="button">−</button>
+              <span class="step-val" id="swissRoundsVal">Auto</span>
+              <button class="step-btn" id="swissPlus" type="button">+</button>
+              <button class="btn btn-ghost btn-sm" id="swissAuto" type="button">Auto</button>
+            </div>
+          </div>
+
+          <!-- Group stage options -->
+          <div class="sub-config hidden" id="groupConfig">
+            <div class="field">
+              <span class="field-label">Number of Groups</span>
+              <div class="stepper">
+                <button class="step-btn" id="grpMinus" type="button">−</button>
+                <span class="step-val" id="numGroupsVal">2</span>
+                <button class="step-btn" id="grpPlus" type="button">+</button>
+                <span class="stepper-note" id="groupSplitNote"></span>
+              </div>
+            </div>
+            <div class="field">
+              <span class="field-label">Group Stage Format</span>
+              <select class="input select" id="groupFormat">
+                <option value="roundrobin">Round Robin</option>
+                <option value="swiss">Swiss</option>
+                <option value="single">Single Elimination</option>
+                <option value="double">Double Elimination</option>
+              </select>
+            </div>
+            <div class="field">
+              <span class="field-label">Advance Per Group</span>
+              <div class="stepper">
+                <button class="step-btn" id="advMinus" type="button">−</button>
+                <span class="step-val" id="advVal">2</span>
+                <button class="step-btn" id="advPlus" type="button">+</button>
+              </div>
+            </div>
+            <div class="field">
+              <span class="field-label">Main Bracket Format</span>
+              <select class="input select" id="mainFormat">
+                <option value="single">Single Elimination</option>
+                <option value="double">Double Elimination</option>
+                <option value="roundrobin">Round Robin</option>
+                <option value="swiss">Swiss</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="field">
+            <span class="field-label">PvP Mode</span>
+            <div class="mode-grid" id="modeGrid"><!-- modes injected --></div>
+          </div>
+        </div>
+
+        <!-- RIGHT: players -->
+        <div class="panel">
+          <h2 class="panel-title"><span class="num">2</span> Players <span class="count-pill" id="playerCount">0</span></h2>
+
+          <form class="add-row" id="addPlayerForm" autocomplete="off">
+            <div class="add-preview" id="addPreview">
+              <img id="addPreviewImg" alt="" src="" />
+              <span class="add-preview-fallback">?</span>
+            </div>
+            <input type="text" id="playerInput" class="input" placeholder="Minecraft username…" maxlength="16" />
+            <button type="submit" class="btn btn-primary" id="addPlayerBtn">Add</button>
+          </form>
+          <p class="hint" id="addHint">Type a Minecraft username — the skin head loads automatically.</p>
+
+          <ul class="player-list" id="playerList"></ul>
+
+          <div class="quick-actions">
+            <div class="sample-adder">
+              <button class="step-btn sm" id="sampleMinus" type="button">−</button>
+              <input type="number" id="sampleCount" class="mini-num" min="1" value="8" />
+              <button class="step-btn sm" id="samplePlus" type="button">+</button>
+              <button class="btn btn-ghost btn-sm" id="seedSample">Add samples</button>
+            </div>
+            <button class="btn btn-ghost btn-sm" id="clearPlayers">Clear all</button>
+          </div>
+          <p class="hint" id="sampleAvail"></p>
+        </div>
+      </div>
+
+      <div class="generate-bar">
+        <div class="gen-summary" id="genSummary">Add at least 2 players to generate a bracket.</div>
+        <button class="btn btn-primary btn-lg" id="generateBtn" disabled>Generate Bracket →</button>
+      </div>
+    </section>
+
+    <!-- ===================== BRACKET VIEW ===================== -->
+    <section class="view hidden" id="view-bracket">
+      <div class="bracket-head">
+        <div>
+          <span class="eyebrow" id="bracketMode">MODE</span>
+          <h1 class="bracket-title" id="bracketName">Tournament</h1>
+        </div>
+        <div class="bracket-actions">
+          <div class="champion-badge hidden" id="championBadge">
+            <span class="champ-label">CHAMPION</span>
+            <div class="champ-body">
+              <img id="champImg" alt="" />
+              <span id="champName">—</span>
+            </div>
+          </div>
+          <button class="btn btn-ghost" id="backToSetup">Edit Setup</button>
+        </div>
+      </div>
+
+      <div class="bracket-scroll" id="bracketScroll">
+        <!-- bracket / round robin injected here -->
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

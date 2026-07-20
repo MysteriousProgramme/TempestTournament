@@ -468,4 +468,109 @@ body {
 .slot.placeholder { cursor: default; }
 .slot.placeholder .slot-head { background: repeating-linear-gradient(45deg, rgba(239,68,68,0.1), rgba(239,68,68,0.1) 4px, transparent 4px, transparent 8px); }
 
+/* ============================================================
+   MODALS (style popup + pvpchamp)
+   ============================================================ */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 200; display: grid; place-items: center;
+  background: rgba(6,4,4,0.72); backdrop-filter: blur(6px); padding: 24px; overflow-y: auto;
+  animation: pop .12s ease;
+}
+.modal {
+  width: 100%; max-width: 560px; background: #17110f; border: 1px solid var(--border-strong);
+  border-radius: var(--radius); box-shadow: 0 24px 70px rgba(0,0,0,0.7); padding: 26px;
+  max-height: 90vh; overflow-y: auto;
+}
+.modal-title { font-size: 22px; font-weight: 900; letter-spacing: -0.02em; }
+.modal-sub { color: var(--muted); font-size: 14px; margin-top: 4px; margin-bottom: 20px; }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 22px; }
+.modal-actions .btn { flex: 0 0 auto; }
+
+/* style cards */
+.style-opts { display: flex; flex-direction: column; gap: 10px; }
+.style-card {
+  text-align: left; cursor: pointer; font: inherit; display: flex; flex-direction: column; gap: 3px;
+  background: rgba(0,0,0,0.3); border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  padding: 14px 16px; transition: .14s;
+}
+.style-card:hover { border-color: rgba(239,68,68,0.5); }
+.style-card.active { border-color: var(--red); background: rgba(239,68,68,0.10); box-shadow: 0 0 0 3px rgba(239,68,68,0.14); }
+.style-name { font-weight: 800; font-size: 15px; }
+.style-desc { font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+.style-config { margin-top: 18px; }
+.config-note { font-size: 14px; color: var(--muted); background: rgba(255,255,255,0.03); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); padding: 14px; }
+.config-label { font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 10px; }
+.config-hint { font-size: 12px; color: var(--muted-2); margin-top: 10px; }
+.config-hint.ok { color: var(--win); }
+
+/* mode pick chips (shared: config + champ modal) */
+.modepick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.modepick {
+  cursor: pointer; font: inherit; display: flex; flex-direction: column; align-items: center; gap: 5px; position: relative;
+  background: rgba(0,0,0,0.3); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); padding: 10px 6px 8px; transition: .13s;
+}
+.modepick img { width: 30px; height: 30px; object-fit: contain; }
+.modepick span { font-size: 11px; font-weight: 700; }
+.modepick:hover:not(.disabled) { border-color: rgba(239,68,68,0.5); transform: translateY(-2px); }
+.modepick.active { border-color: var(--red); background: rgba(239,68,68,0.14); box-shadow: 0 0 14px rgba(239,68,68,0.22); }
+.modepick.banned { border-color: rgba(120,120,120,0.5); opacity: .5; }
+.modepick.banned img { filter: grayscale(1); }
+.modepick.disabled { opacity: .38; cursor: not-allowed; }
+.modepick-tag { position: absolute; top: 4px; right: 4px; font-size: 9px; font-weight: 900; color: var(--red-lite); font-style: normal; }
+
+/* switching: per-match mode chip in header */
+.match-mode { color: var(--red-lite); display: inline-flex; align-items: center; gap: 4px; cursor: context-menu; background: rgba(239,68,68,0.12); border-radius: 4px; padding: 1px 5px 1px 3px; }
+.match-mode img { width: 13px; height: 13px; object-fit: contain; }
+
+/* ctx-menu mode list (switching) */
+.ctx-modes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-bottom: 10px; max-height: 150px; overflow-y: auto; }
+.ctx-mode { cursor: pointer; font: inherit; background: rgba(0,0,0,0.35); border: 1px solid var(--border-strong); border-radius: 7px; padding: 6px 2px 4px; display: flex; flex-direction: column; align-items: center; gap: 3px; transition: .12s; }
+.ctx-mode img { width: 20px; height: 20px; object-fit: contain; }
+.ctx-mode span { font-size: 9px; font-weight: 700; }
+.ctx-mode:hover { border-color: rgba(239,68,68,0.5); }
+.ctx-mode.active { border-color: var(--red); background: rgba(239,68,68,0.14); }
+
+/* pvpchamp match footer */
+.match.champ { min-width: 260px; }
+.champ-foot { border-top: 1px solid var(--border-strong); padding: 8px 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: rgba(0,0,0,0.2); }
+.champ-hint { font-size: 11px; color: var(--muted-2); font-style: italic; }
+.champ-games { display: flex; gap: 5px; }
+.cgame { position: relative; display: inline-flex; flex-direction: column; align-items: center; }
+.cgame img { width: 22px; height: 22px; object-fit: contain; opacity: .85; }
+.cgame em { font-size: 8px; font-weight: 800; color: var(--muted-2); font-style: normal; }
+.cgame.decider img { filter: drop-shadow(0 0 4px var(--red-glow)); }
+.cgame.won img { opacity: 1; }
+.cgame.won::after { content: "✓"; position: absolute; top: -4px; right: -4px; font-size: 9px; color: var(--win); font-weight: 900; }
+.champ-manage { padding: 6px 10px !important; font-size: 12px !important; white-space: nowrap; }
+
+/* pvpchamp modal */
+.champ-vs { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 18px; font-weight: 800; }
+.cvs-p { display: inline-flex; align-items: center; gap: 8px; font-size: 16px; }
+.cvs-p img { width: 28px; height: 28px; border-radius: 6px; image-rendering: pixelated; }
+.cvs-x { color: var(--muted-2); font-size: 13px; }
+.champ-section { font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 18px 0 10px; }
+.champ-section:first-child { margin-top: 0; }
+.champ-step { font-size: 15px; margin-bottom: 12px; }
+.champ-step em { color: var(--red-lite); font-style: normal; font-weight: 800; }
+.champ-assign { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cassign { display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-strong); border-radius: 9px; padding: 9px 11px; }
+.cassign img { width: 26px; height: 26px; object-fit: contain; }
+.cassign b { font-size: 13px; display: block; }
+.cassign span { font-size: 11px; color: var(--muted); }
+.cassign.decider { border-color: rgba(239,68,68,0.5); }
+.cassign.banned { opacity: .55; }
+.cassign.banned img { filter: grayscale(1); }
+.cgrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid var(--border-strong); }
+.cgrow.locked { opacity: .4; }
+.cgrow-mode { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; }
+.cgrow-mode img { width: 22px; height: 22px; object-fit: contain; }
+.cgrow-pick { display: flex; gap: 6px; }
+.cgrow-btn { font: inherit; font-weight: 700; font-size: 13px; cursor: pointer; color: var(--text); background: rgba(0,0,0,0.35); border: 1px solid var(--border-strong); border-radius: 8px; padding: 7px 12px; transition: .12s; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cgrow-btn:hover { border-color: rgba(239,68,68,0.5); }
+.cgrow-btn.won { background: rgba(239,68,68,0.16); border-color: var(--red); color: var(--red-lite); }
+.champ-winner { margin-top: 16px; display: flex; align-items: center; gap: 10px; background: linear-gradient(135deg, rgba(34,197,94,0.14), rgba(34,197,94,0.05)); border: 1px solid rgba(34,197,94,0.4); border-radius: var(--radius-sm); padding: 12px 16px; box-shadow: 0 0 22px var(--win-glow); }
+.champ-winner img { width: 30px; height: 30px; border-radius: 6px; image-rendering: pixelated; }
+.champ-winner b { color: var(--win); }
+@media (max-width: 520px) { .champ-assign { grid-template-columns: 1fr; } }
+
 

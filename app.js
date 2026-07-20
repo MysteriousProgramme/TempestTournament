@@ -8,6 +8,7 @@ const MODES = [
   { id: "sword",   name: "Sword",   img: "assets/modes/sword.png" },
   { id: "axe",     name: "Axe",     img: "assets/modes/axe.png" },
   { id: "mace",    name: "Mace",    img: "assets/modes/mace.png" },
+  { id: "spear",   name: "Spear Mace", img: "assets/modes/spear.png" },
   { id: "uhc",     name: "UHC",     img: "assets/modes/uhc.png" },
   { id: "nethpot", name: "NethPot", img: "assets/modes/nethpot.png" },
   { id: "pot",     name: "Pot",     img: "assets/modes/pot.png" },
@@ -37,7 +38,18 @@ let state = {
   formats: {},              // matchId -> { kind:'BO'|'FT', n }
   swissRounds: null,        // null = auto (ceil(log2 n))
   groupConfig: { numGroups: 2, groupFormat: "roundrobin", advancePerGroup: 2, mainFormat: "single" },
+  style: "regular",         // regular | switching | pvpchamp
+  switchModes: [],          // mode ids to cycle through (switching)
+  champModes: [],           // exactly 5 mode ids (pvpchamp)
+  matchModes: {},           // matchId -> modeId override (switching)
+  champ: {},                // matchId -> { picks:{a,b}, bans:{a,b}, wins:{g1,g2,g3} }
 };
+const DEFAULT_GROUP = { numGroups: 2, groupFormat: "roundrobin", advancePerGroup: 2, mainFormat: "single" };
+function freshState() {
+  return { name: "", type: "single", mode: "sword", players: [], view: "setup", scores: {}, formats: {},
+    swissRounds: null, groupConfig: Object.assign({}, DEFAULT_GROUP), style: "regular",
+    switchModes: [], champModes: [], matchModes: {}, champ: {} };
+}
 const DEFAULT_FORMAT = { kind: "BO", n: 1 };
 function fmtLabel(f) { return (f || DEFAULT_FORMAT).kind + (f || DEFAULT_FORMAT).n; }
 function winThreshold(f) { f = f || DEFAULT_FORMAT; return f.kind === "FT" ? f.n : Math.floor(f.n / 2) + 1; }
@@ -759,9 +771,19 @@ let currentGraph = null;
 function renderBracket() {
   const graph = currentGraph = resolve(buildGraphWithState());
   syncScoresFromGraph(graph);
-  const mode = modeById(state.mode);
   const typeLabel = { single: "SINGLE ELIM", double: "DOUBLE ELIM", roundrobin: "ROUND ROBIN", swiss: "SWISS", groups: "GROUP STAGE" }[state.type];
-  $("#bracketMode").innerHTML = `<img class="mode-eyebrow-img" src="${mode.img}" alt=""> ${mode.name.toUpperCase()} · ${typeLabel}`;
+  let modeHtml;
+  if (state.style === "switching") {
+    const icons = (state.switchModes.length ? state.switchModes : [state.mode]).map(id => `<img class="mode-eyebrow-img" src="${modeById(id).img}" alt="">`).join("");
+    modeHtml = `${icons} SWITCHING · ${typeLabel}`;
+  } else if (state.style === "pvpchamp") {
+    const icons = state.champModes.map(id => `<img class="mode-eyebrow-img" src="${modeById(id).img}" alt="">`).join("");
+    modeHtml = `${icons} PVPCHAMP · ${typeLabel}`;
+  } else {
+    const mode = modeById(state.mode);
+    modeHtml = `<img class="mode-eyebrow-img" src="${mode.img}" alt=""> ${mode.name.toUpperCase()} · ${typeLabel}`;
+  }
+  $("#bracketMode").innerHTML = modeHtml;
   $("#bracketName").textContent = state.name || "Untitled Tournament";
 
   const scroll = $("#bracketScroll");
@@ -803,7 +825,16 @@ function renderBracket() {
 function buildGraphWithState() {
   const g = applyStateTo(buildGraph());
   Object.keys(g.M).forEach((id, i) => { g.M[id].no = i + 1; }); // stable display numbers
+  // PvPChamp: every match is a best-of-3 (first to 2)
+  if (state.style === "pvpchamp") Object.values(g.M).forEach(m => { m.format = { kind: "BO", n: 3 }; });
   return g;
+}
+
+/* the mode a Switching-tournament match is played in (cycled, override-able) */
+function switchModeFor(m) {
+  if (state.matchModes[m.id]) return state.matchModes[m.id];
+  const list = state.switchModes.length ? state.switchModes : [state.mode];
+  return list[((m.no || 1) - 1) % list.length];
 }
 
 /* write pruned scores back to state so persistence stays clean */
@@ -838,21 +869,204 @@ function buildBracketSection(section, graph) {
 
 function renderMatch(m, graph, section, idxInCol) {
   const done = m._decided && m._winner;
-  const card = el("div", "match" + (done ? " done" : ""));
+  const isChamp = state.style === "pvpchamp";
+  const card = el("div", "match" + (done ? " done" : "") + (isChamp ? " champ" : ""));
   card.dataset.mid = m.id;
 
   const head = el("div", "match-num");
   const label = m.reset ? "RESET" : (section && section.key === "GF" ? "GF" : "M" + (m.no || "?"));
   const fmt = m.format || DEFAULT_FORMAT;
-  head.innerHTML = `<span>${label}</span><span class="match-fmt" title="Right-click to change format">${fmtLabel(fmt)}</span>`;
+  let rightHtml = `<span class="match-fmt" title="Right-click to change format">${fmtLabel(fmt)}</span>`;
+  // switching: show the match's mode
+  if (state.style === "switching") {
+    const mo = modeById(switchModeFor(m));
+    rightHtml = `<span class="match-mode" title="Right-click to change mode"><img src="${mo.img}" alt="">${mo.name}</span>`;
+  } else if (isChamp) {
+    rightHtml = `<span class="match-fmt">BO3</span>`;
+  }
+  head.innerHTML = `<span>${label}</span>${rightHtml}`;
   card.appendChild(head);
 
   card.appendChild(renderSlot(m, "a", graph));
   card.appendChild(renderSlot(m, "b", graph));
 
-  // right-click to set series format (FT / BO)
+  // PvPChamp: pick/ban summary + manage button
+  if (isChamp) card.appendChild(renderChampFooter(m));
+
+  // right-click context menu (format, and mode for switching)
   card.addEventListener("contextmenu", e => { e.preventDefault(); openFormatMenu(m.id, e.clientX, e.clientY); });
   return card;
+}
+
+/* compact pick/ban summary shown under a PvPChamp match */
+function renderChampFooter(m) {
+  const foot = el("div", "champ-foot");
+  const bothReal = isPlayer(m._a) && isPlayer(m._b) && !m._a.placeholder && !m._b.placeholder;
+  if (!bothReal) { foot.appendChild(el("span", "champ-hint", "Waiting for players…")); return foot; }
+  const c = state.champ[m.id];
+  const games = champGames(m);
+  if (!games) {
+    const btn = el("button", "btn btn-ghost btn-sm champ-manage", "Pick / Ban →");
+    btn.onclick = ev => { ev.stopPropagation(); openChampModal(m.id); };
+    foot.appendChild(el("span", "champ-hint", "Modes not set"));
+    foot.appendChild(btn);
+  } else {
+    const row = el("div", "champ-games");
+    games.forEach((g, i) => {
+      const mo = modeById(g.mode);
+      const w = c && c.wins && c.wins["g" + (i + 1)];
+      const chip = el("span", "cgame" + (g.decider ? " decider" : "") + (w ? " won" : ""));
+      chip.innerHTML = `<img src="${mo.img}" alt=""><em>G${i + 1}</em>`;
+      chip.title = `Game ${i + 1}: ${mo.name}${g.decider ? " (decider)" : ""}`;
+      row.appendChild(chip);
+    });
+    foot.appendChild(row);
+    const btn = el("button", "btn btn-ghost btn-sm champ-manage", m._decided ? "View" : "Play →");
+    btn.onclick = ev => { ev.stopPropagation(); openChampModal(m.id); };
+    foot.appendChild(btn);
+  }
+  return foot;
+}
+
+/* ---------- PvPChamp pick/ban helpers ---------- */
+function champUsed(c) { return [c.picks.a, c.picks.b, c.bans.a, c.bans.b].filter(Boolean); }
+function champComplete(c) { return !!(c && c.picks.a && c.picks.b && c.bans.a && c.bans.b); }
+function champDecider(c) {
+  const used = champUsed(c);
+  return state.champModes.find(id => !used.includes(id)) || null;
+}
+/* ordered games once pick/ban is complete, else null */
+function champGames(m) {
+  const c = state.champ[m.id];
+  if (!champComplete(c)) return null;
+  return [
+    { mode: c.picks.a },
+    { mode: c.picks.b },
+    { mode: champDecider(c), decider: true },
+  ];
+}
+function ensureChamp(matchId) {
+  if (!state.champ[matchId]) state.champ[matchId] = { picks: {}, bans: {}, wins: {} };
+  const c = state.champ[matchId];
+  c.picks = c.picks || {}; c.bans = c.bans || {}; c.wins = c.wins || {};
+  return c;
+}
+/* recompute the match win tally from recorded game winners */
+function syncChampScore(matchId, aId, bId) {
+  const c = state.champ[matchId];
+  if (!c || !c.wins) { delete state.scores[matchId]; return; }
+  let aw = 0, bw = 0;
+  Object.values(c.wins).forEach(pid => { if (pid === aId) aw++; else if (pid === bId) bw++; });
+  const sc = {};
+  if (aw) sc[aId] = aw;
+  if (bw) sc[bId] = bw;
+  if (aw || bw) state.scores[matchId] = sc; else delete state.scores[matchId];
+}
+
+/* ---------- PvPChamp match modal ---------- */
+function openChampModal(matchId) {
+  const build = () => {
+    const m = currentGraph.M[matchId];
+    if (!m || !isPlayer(m._a) || !isPlayer(m._b)) { closeModal(); return; }
+    const A = m._a, B = m._b;
+    const c = ensureChamp(matchId);
+    const wrap = el("div", "champ-modal");
+
+    wrap.appendChild(el("div", "modal-title", "PvPChamp Match"));
+    const vs = el("div", "champ-vs");
+    vs.innerHTML = `<span class="cvs-p"><img src="${headUrl(A.name,28)}" alt="">${esc(A.name)}</span><span class="cvs-x">vs</span><span class="cvs-p"><img src="${headUrl(B.name,28)}" alt="">${esc(B.name)}</span>`;
+    wrap.appendChild(vs);
+
+    // determine current pick/ban step
+    let step = null;
+    if (!c.picks.a) step = { who: A, key: "picks", side: "a", verb: "picks", tag: "Game 1" };
+    else if (!c.picks.b) step = { who: B, key: "picks", side: "b", verb: "picks", tag: "Game 2" };
+    else if (!c.bans.a) step = { who: A, key: "bans", side: "a", verb: "bans", tag: "Ban" };
+    else if (!c.bans.b) step = { who: B, key: "bans", side: "b", verb: "bans", tag: "Ban" };
+
+    const used = champUsed(c);
+    const pb = el("div", "champ-pb");
+    pb.appendChild(el("div", "champ-section", "Pick &amp; Ban"));
+    if (step) {
+      pb.appendChild(el("div", "champ-step", `<b>${esc(step.who.name)}</b> ${step.verb} — <em>${step.tag}</em>`));
+      const grid = el("div", "modepick-grid");
+      state.champModes.forEach(id => {
+        const taken = used.includes(id);
+        grid.appendChild(modeChip(id, { disabled: taken, banned: taken && (c.bans.a === id || c.bans.b === id), active: taken && (c.picks.a === id || c.picks.b === id), onClick: () => {
+          c[step.key][step.side] = id; save(); renderBracket(); build();
+        } }));
+      });
+      pb.appendChild(grid);
+    } else {
+      // complete — show the mode assignments
+      const games = champGames(m);
+      const grid = el("div", "champ-assign");
+      games.forEach((g, i) => {
+        const mo = modeById(g.mode);
+        const owner = i === 0 ? A.name : i === 1 ? B.name : "Decider";
+        grid.appendChild(el("div", "cassign" + (g.decider ? " decider" : ""),
+          `<img src="${mo.img}" alt=""><div><b>Game ${i + 1}</b><span>${mo.name} · ${i < 2 ? esc(owner) + "'s pick" : "tiebreaker"}</span></div>`));
+      });
+      // show bans
+      grid.appendChild(el("div", "cassign banned", `<img src="${modeById(c.bans.a).img}" alt=""><div><b>Banned</b><span>${modeById(c.bans.a).name} · ${esc(A.name)}</span></div>`));
+      grid.appendChild(el("div", "cassign banned", `<img src="${modeById(c.bans.b).img}" alt=""><div><b>Banned</b><span>${modeById(c.bans.b).name} · ${esc(B.name)}</span></div>`));
+      pb.appendChild(grid);
+    }
+    wrap.appendChild(pb);
+
+    // results phase
+    if (champComplete(c)) {
+      const games = champGames(m);
+      let aw = 0, bw = 0;
+      Object.values(c.wins).forEach(pid => { if (pid === A.id) aw++; else if (pid === B.id) bw++; });
+      const decided = aw >= 2 || bw >= 2;
+
+      const res = el("div", "champ-results");
+      res.appendChild(el("div", "champ-section", `Games <span class="soft">(first to 2)</span> — <b>${aw}</b>–<b>${bw}</b>`));
+      games.forEach((g, i) => {
+        const gi = i + 1, gk = "g" + gi;
+        // decider only playable/visible when 1-1
+        if (g.decider && !(aw === 1 && bw === 1) && !c.wins[gk]) return;
+        const mo = modeById(g.mode);
+        const rowLocked = decided && !c.wins[gk];
+        const row = el("div", "cgrow" + (rowLocked ? " locked" : ""));
+        row.appendChild(el("span", "cgrow-mode", `<img src="${mo.img}" alt=""> G${gi} · ${mo.name}${g.decider ? " (decider)" : ""}`));
+        const pick = el("div", "cgrow-pick");
+        [A, B].forEach(P => {
+          const won = c.wins[gk] === P.id;
+          const b = el("button", "cgrow-btn" + (won ? " won" : ""), esc(P.name));
+          b.onclick = () => {
+            if (c.wins[gk] === P.id) delete c.wins[gk]; else c.wins[gk] = P.id;
+            // clamp: if match already decided by earlier games, ignore extra (recompute handles)
+            syncChampScore(matchId, A.id, B.id);
+            save(); renderBracket(); build();
+          };
+          pick.appendChild(b);
+        });
+        row.appendChild(pick);
+        res.appendChild(row);
+      });
+      wrap.appendChild(res);
+
+      if (decided) {
+        const champW = aw >= 2 ? A : B;
+        const banner = el("div", "champ-winner");
+        banner.innerHTML = `<img src="${headUrl(champW.name,30)}" alt=""> <span><b>${esc(champW.name)}</b> wins the match</span>`;
+        wrap.appendChild(banner);
+      }
+    }
+
+    const actions = el("div", "modal-actions");
+    const resetBtn = el("button", "btn btn-ghost", "Reset match");
+    resetBtn.onclick = () => { delete state.champ[matchId]; delete state.scores[matchId]; save(); renderBracket(); build(); };
+    const closeBtn = el("button", "btn btn-primary", "Done");
+    closeBtn.onclick = closeModal;
+    actions.append(resetBtn, closeBtn);
+    wrap.appendChild(actions);
+
+    openModal(wrap);
+  };
+  build();
 }
 
 function renderSlot(m, key, graph) {
@@ -895,15 +1109,19 @@ function renderSlot(m, key, graph) {
 
   // score + interactivity (placeholders are not interactive)
   const bothPresent = isPlayer(m._a) && isPlayer(m._b) && !m._a.placeholder && !m._b.placeholder;
+  const champStyle = state.style === "pvpchamp";
   if (bothPresent && isPlayer(val)) {
     const wins = key === "a" ? m._aWins : m._bWins;
     const th = m._th || 1;
-    // show the running score once it's a series (BO>1 / FT>1) or a game has been played
     const showScore = th > 1 || m._decided || (m._aWins + m._bWins) > 0;
     slot.appendChild(el("span", "slot-score", showScore ? String(wins) : ""));
-    if (th > 1) slot.appendChild(el("span", "pick-hint", "+1"));
-    else slot.appendChild(el("span", "pick-hint", "win"));
-    slot.onclick = () => addGame(m.id, val.id);
+    if (champStyle) {
+      // scoring handled by the pick/ban modal, not slot clicks
+      slot.classList.add("locked");
+    } else {
+      slot.appendChild(el("span", "pick-hint", th > 1 ? "+1" : "win"));
+      slot.onclick = () => addGame(m.id, val.id);
+    }
   } else {
     slot.classList.add("locked");
     slot.appendChild(el("span", "slot-score", ""));
@@ -933,8 +1151,29 @@ function addGame(matchId, playerId) {
 /* ---------- format context menu ---------- */
 let _menuEl = null;
 function closeFormatMenu() { if (_menuEl) { _menuEl.remove(); _menuEl = null; document.removeEventListener("click", closeFormatMenu); } }
+function placeMenu(menu, x, y) {
+  document.body.appendChild(menu);
+  const r = menu.getBoundingClientRect();
+  menu.style.left = Math.min(x, window.innerWidth - r.width - 8) + "px";
+  menu.style.top = Math.min(y, window.innerHeight - r.height - 8) + "px";
+  setTimeout(() => document.addEventListener("click", closeFormatMenu), 0);
+}
 function openFormatMenu(matchId, x, y) {
   closeFormatMenu();
+
+  // PvPChamp: right-click opens pick/ban management
+  if (state.style === "pvpchamp") {
+    const menu = _menuEl = el("div", "ctx-menu");
+    menu.innerHTML = `<div class="ctx-title">PvPChamp match</div>`;
+    const open = el("button", "ctx-reset", "Open pick / ban");
+    open.onclick = ev => { ev.stopPropagation(); closeFormatMenu(); openChampModal(matchId); };
+    const reset = el("button", "ctx-reset", "Reset match");
+    reset.onclick = ev => { ev.stopPropagation(); delete state.champ[matchId]; delete state.scores[matchId]; save(); renderBracket(); closeFormatMenu(); };
+    menu.append(open, reset);
+    placeMenu(menu, x, y);
+    return;
+  }
+
   const cur = state.formats[matchId] || DEFAULT_FORMAT;
   const menu = _menuEl = el("div", "ctx-menu");
   menu.innerHTML = `<div class="ctx-title">Match format</div>`;
@@ -969,18 +1208,25 @@ function openFormatMenu(matchId, x, y) {
   customRow.append(kindSel, numIn, apply);
   menu.appendChild(customRow);
 
+  // Switching: choose this match's mode
+  if (state.style === "switching") {
+    menu.appendChild(el("div", "ctx-title", "Match mode"));
+    const mgrid = el("div", "ctx-modes");
+    const curMode = switchModeFor(currentGraph.M[matchId] || { id: matchId });
+    MODES.forEach(mo => {
+      const b = el("button", "ctx-mode" + (mo.id === curMode ? " active" : ""));
+      b.innerHTML = `<img src="${mo.img}" alt=""><span>${mo.name}</span>`;
+      b.onclick = ev => { ev.stopPropagation(); state.matchModes[matchId] = mo.id; save(); renderBracket(); closeFormatMenu(); };
+      mgrid.appendChild(b);
+    });
+    menu.appendChild(mgrid);
+  }
+
   const reset = el("button", "ctx-reset", "Reset match score");
   reset.onclick = ev => { ev.stopPropagation(); delete state.scores[matchId]; save(); renderBracket(); closeFormatMenu(); };
   menu.appendChild(reset);
 
-  document.body.appendChild(menu);
-  // position within viewport
-  const r = menu.getBoundingClientRect();
-  const px = Math.min(x, window.innerWidth - r.width - 8);
-  const py = Math.min(y, window.innerHeight - r.height - 8);
-  menu.style.left = px + "px";
-  menu.style.top = py + "px";
-  setTimeout(() => document.addEventListener("click", closeFormatMenu), 0);
+  placeMenu(menu, x, y);
 }
 
 function setFormat(matchId, kind, n) {
@@ -989,6 +1235,130 @@ function setFormat(matchId, kind, n) {
   delete state.scores[matchId];   // changing format resets the series score
   save();
   renderBracket();
+}
+
+/* ============================================================
+   GENERIC MODAL
+   ============================================================ */
+function openModal(node) {
+  const box = $("#modalBox");
+  box.innerHTML = "";
+  box.appendChild(node);
+  $("#modalOverlay").classList.remove("hidden");
+}
+function closeModal() { $("#modalOverlay").classList.add("hidden"); $("#modalBox").innerHTML = ""; }
+
+function modeChip(modeId, { active, banned, disabled, label, onClick } = {}) {
+  const m = modeById(modeId);
+  const chip = el("button", "modepick" + (active ? " active" : "") + (banned ? " banned" : "") + (disabled ? " disabled" : ""));
+  chip.type = "button";
+  chip.innerHTML = `<img src="${m.img}" alt=""><span>${m.name}</span>` + (label ? `<em class="modepick-tag">${label}</em>` : "");
+  if (onClick && !disabled) chip.onclick = onClick;
+  return chip;
+}
+
+/* ============================================================
+   STYLE SELECTION POPUP (shown on Generate)
+   ============================================================ */
+function openStyleModal() {
+  if (!state.switchModes.length) state.switchModes = [state.mode];
+  if (state.champModes.length !== 5) state.champModes = defaultChampModes();
+
+  const wrap = el("div", "style-modal");
+  wrap.appendChild(el("div", "modal-title", "Choose Tournament Style"));
+  wrap.appendChild(el("div", "modal-sub", "How should PvP modes work across the bracket?"));
+
+  const opts = el("div", "style-opts");
+  const configArea = el("div", "style-config");
+
+  const STYLES = [
+    { id: "regular", title: "Regular Tournament", desc: "One mode for the whole bracket." },
+    { id: "switching", title: "Switching Tournament", desc: "Each match plays a different mode (auto-cycled, editable)." },
+    { id: "pvpchamp", title: "PvPChamp Tournament", desc: "5 modes; players pick & ban a best-of-3 for every match." },
+  ];
+  let chosen = state.style || "regular";
+
+  const renderConfig = () => {
+    configArea.innerHTML = "";
+    if (chosen === "regular") {
+      const m = modeById(state.mode);
+      const row = el("div", "config-note");
+      row.innerHTML = `Uses your selected mode: <b class="mode-inline"><img src="${m.img}" alt="">${m.name}</b>. Change it on the setup screen.`;
+      configArea.appendChild(row);
+    } else if (chosen === "switching") {
+      configArea.appendChild(el("div", "config-label", "Modes in rotation (matches cycle through these)"));
+      const grid = el("div", "modepick-grid");
+      MODES.forEach(mo => {
+        const on = state.switchModes.includes(mo.id);
+        grid.appendChild(modeChip(mo.id, { active: on, onClick: () => {
+          if (on) { if (state.switchModes.length > 1) state.switchModes = state.switchModes.filter(x => x !== mo.id); }
+          else state.switchModes.push(mo.id);
+          renderConfig();
+        } }));
+      });
+      configArea.appendChild(grid);
+      configArea.appendChild(el("div", "config-hint", `${state.switchModes.length} selected · at least 1 required`));
+    } else if (chosen === "pvpchamp") {
+      configArea.appendChild(el("div", "config-label", "Pick exactly 5 modes for the pick/ban pool"));
+      const grid = el("div", "modepick-grid");
+      MODES.forEach(mo => {
+        const on = state.champModes.includes(mo.id);
+        const full = state.champModes.length >= 5;
+        grid.appendChild(modeChip(mo.id, { active: on, disabled: !on && full, onClick: () => {
+          if (on) state.champModes = state.champModes.filter(x => x !== mo.id);
+          else if (state.champModes.length < 5) state.champModes.push(mo.id);
+          renderConfig();
+        } }));
+      });
+      configArea.appendChild(grid);
+      const ok = state.champModes.length === 5;
+      configArea.appendChild(el("div", "config-hint" + (ok ? " ok" : ""), `${state.champModes.length} / 5 selected`));
+    }
+    // enable/disable create
+    const createBtn = $("#styleCreate");
+    if (createBtn) createBtn.disabled = (chosen === "pvpchamp" && state.champModes.length !== 5) || (chosen === "switching" && state.switchModes.length < 1);
+  };
+
+  STYLES.forEach(s => {
+    const card = el("button", "style-card" + (chosen === s.id ? " active" : ""));
+    card.type = "button";
+    card.innerHTML = `<span class="style-name">${s.title}</span><span class="style-desc">${s.desc}</span>`;
+    card.onclick = () => {
+      chosen = s.id;
+      $$(".style-card").forEach(c => c.classList.remove("active"));
+      card.classList.add("active");
+      renderConfig();
+    };
+    opts.appendChild(card);
+  });
+
+  wrap.append(opts, configArea);
+
+  const actions = el("div", "modal-actions");
+  const cancel = el("button", "btn btn-ghost", "Cancel");
+  cancel.onclick = closeModal;
+  const create = el("button", "btn btn-primary", "Create Tournament →");
+  create.id = "styleCreate";
+  create.onclick = () => {
+    state.style = chosen;
+    // reset progress for a fresh bracket
+    state.scores = {}; state.formats = {}; state.matchModes = {}; state.champ = {};
+    save();
+    closeModal();
+    setView("bracket");
+  };
+  actions.append(cancel, create);
+  wrap.appendChild(actions);
+
+  openModal(wrap);
+  renderConfig();
+}
+
+function defaultChampModes() {
+  const pref = ["uhc", "diasmp", "spear", "cart", "sword"];
+  const ids = pref.filter(id => MODES.some(m => m.id === id));
+  for (const m of MODES) { if (ids.length >= 5) break; if (!ids.includes(m.id)) ids.push(m.id); }
+  return ids.slice(0, 5);
 }
 
 /* ---------- SVG connectors ---------- */
@@ -1237,7 +1607,7 @@ function init() {
     const chip = e.target.closest("[data-bracket]");
     if (!chip) return;
     state.type = chip.dataset.bracket;
-    state.scores = {}; state.formats = {};              // reset progress on type change
+    state.scores = {}; state.formats = {}; state.matchModes = {}; state.champ = {};              // reset progress on type change
     save();
     $$("[data-bracket]").forEach(c => c.classList.toggle("active", c === chip));
     renderConfigPanels();
@@ -1258,7 +1628,7 @@ function init() {
 
   // group config controls
   const gc = () => state.groupConfig;
-  const resetProgress = () => { state.scores = {}; state.formats = {}; };
+  const resetProgress = () => { state.scores = {}; state.formats = {}; state.matchModes = {}; state.champ = {}; };
   $("#grpMinus").addEventListener("click", () => { gc().numGroups = Math.max(1, gc().numGroups - 1); resetProgress(); save(); renderConfigPanels(); refreshGenerate(); });
   $("#grpPlus").addEventListener("click", () => {
     const maxG = Math.max(1, Math.floor((state.players.length || 2) / 2));
@@ -1285,7 +1655,7 @@ function init() {
     hint.textContent = "Type a Minecraft username — the skin head loads automatically.";
     hint.classList.remove("error");
     state.players.push({ id: "p" + (pidCounter++), name });
-    state.scores = {}; state.formats = {};
+    state.scores = {}; state.formats = {}; state.matchModes = {}; state.champ = {};
     input.value = "";
     updateAddPreview();
     save();
@@ -1316,20 +1686,21 @@ function init() {
       state.players.push({ id: "p" + (pidCounter++), name: n });
       added++;
     }
-    state.scores = {}; state.formats = {}; save(); renderPlayers();
+    state.scores = {}; state.formats = {}; state.matchModes = {}; state.champ = {}; save(); renderPlayers();
   });
   $("#clearPlayers").addEventListener("click", () => {
     if (!state.players.length) return;
-    if (confirm("Remove all players?")) { state.players = []; state.scores = {}; state.formats = {}; save(); renderPlayers(); }
+    if (confirm("Remove all players?")) { state.players = []; state.scores = {}; state.formats = {}; state.matchModes = {}; state.champ = {}; save(); renderPlayers(); }
   });
 
-  // generate
+  // generate — choose tournament style first
   $("#generateBtn").addEventListener("click", () => {
     if (state.players.length < 2) return;
-    state.scores = {}; state.formats = {};   // fresh bracket
-    save();
-    setView("bracket");
+    openStyleModal();
   });
+  // close modal on overlay backdrop click / Escape
+  $("#modalOverlay").addEventListener("click", e => { if (e.target === $("#modalOverlay")) closeModal(); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") { closeModal(); closeFormatMenu(); } });
 
   // nav
   $$("[data-nav]").forEach(b => b.addEventListener("click", e => {
@@ -1341,7 +1712,7 @@ function init() {
   $("#backToSetup").addEventListener("click", () => setView("setup"));
   $("#resetAll").addEventListener("click", () => {
     if (confirm("Reset everything and start over?")) {
-      state = { name: "", type: "single", mode: "sword", players: [], view: "setup", scores: {}, formats: {}, swissRounds: null, groupConfig: { numGroups: 2, groupFormat: "roundrobin", advancePerGroup: 2, mainFormat: "single" } };
+      state = freshState();
       pidCounter = 1; save();
       $("#tName").value = "";
       renderModes();

@@ -255,11 +255,20 @@ renewal is then automatic for good:
 sudo install -m 755 /opt/tempest/server/certbot-deploy-hook.sh      /etc/letsencrypt/renewal-hooks/deploy/tempest.sh
 ```
 
-Tempest has to be serving port 80 for the challenge to be answered, so start it
-first, then issue:
+Tempest has to be serving port 80 for the challenge to be answered. It does that
+by itself: with `TLS_CERT`/`TLS_KEY` set but no certificate there yet, it starts
+on plain HTTP and says so, rather than refusing to run. That is deliberate —
+exiting would make first issuance impossible, because the only way to get a
+certificate is to answer a challenge over port 80.
+
+Start it, confirm it is answering, then issue:
 
 ```bash
 sudo systemctl restart tempest
+curl -s localhost/health          # must print the relay block before you go on
+```
+
+```bash
 sudo certbot certonly --webroot -w /opt/tempest/server/acme      -d 43-210-250-181.sslip.io --agree-tos --no-eff-email -m <your-email>
 ```
 
@@ -400,7 +409,8 @@ anyone has recorded.
 | --- | --- |
 | Login does nothing, no error | Not a secure context — you are on `http://`, or on a bare IP. This is the one at the top of this file. |
 | certbot: "not a valid domain" on the EC2 name | Let's Encrypt blocks `amazonaws.com` hostnames. Use your own domain or `<ip>.sslip.io`. |
-| Service exits: "cannot read the TLS key ... permission denied" | The deploy hook has not run, so `server/tls/` is empty or root-owned. Run it by hand: `sudo /etc/letsencrypt/renewal-hooks/deploy/tempest.sh`. |
+| Log says "no usable TLS certificate ... serving PLAIN HTTP" | Normal before first issuance. If it persists after certbot succeeded, the deploy hook did not run — `sudo /etc/letsencrypt/renewal-hooks/deploy/tempest.sh` then restart. |
+| certbot: "Connection refused" fetching the challenge | Nothing is on port 80. Check `sudo systemctl status tempest` and that `curl -s localhost/health` answers. |
 | Service exits with `EACCES` on listen | `AmbientCapabilities=CAP_NET_BIND_SERVICE` missing from the unit — that is what lets a non-root process bind 80 and 443. |
 | `EADDRINUSE` on 80 or 443 | Something else on the box already serves them. `sudo ss -ltnp \| grep -E ':(80\|443) '` to find it. |
 | certbot renewal fails months later | Port 80 stopped answering the challenge. `sudo certbot renew --dry-run` reproduces it; Tempest must be running for it to pass. |

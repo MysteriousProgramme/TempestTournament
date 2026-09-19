@@ -238,7 +238,8 @@ async function handler(req, res) {
   }
 
   try {
-    if (isApi(url.pathname)) await toWorker(req, res, url);
+    if (url.pathname.startsWith(ACME_PREFIX)) await serveAcme(req, res, url.pathname);
+    else if (isApi(url.pathname)) await toWorker(req, res, url);
     else await serveStatic(req, res, url.pathname);
   } catch (e) {
     console.error("[error] " + req.method + " " + url.pathname + ": " + (e.stack || e.message));
@@ -256,23 +257,29 @@ async function handler(req, res) {
 
 const servers = [];
 
+/* Read the pair if we can. Failing to is NOT fatal: on a fresh box the
+   certificate does not exist yet, and the only way to obtain one is to answer
+   an ACME challenge over port 80 - so exiting here would make first issuance
+   impossible. Serve HTTP instead, get the certificate, restart into HTTPS. */
+let creds = null;
 if (TLS_ON) {
-  /* The private key under /etc/letsencrypt is root-only by default, so "cannot
-     read it" is the single most likely thing to go wrong here. Say which file
-     and why, rather than dumping an ENOENT stack trace and exiting. */
-  let creds;
   try {
     creds = { cert: await fs.readFile(TLS_CERT), key: await fs.readFile(TLS_KEY) };
   } catch (e) {
-    console.error("[tempest] cannot read the TLS " + (/key/i.test(e.path || "") ? "key" : "certificate")
-      + ": " + e.path);
+    const which = /key/i.test(e.path || "") ? "key" : "certificate";
+    console.error("[tempest] no usable TLS " + which + " at " + e.path);
     console.error("[tempest] " + (e.code === "EACCES"
-      ? "permission denied - this process does not run as root, so copy the files somewhere it can read (see server/README.md)"
+      ? "permission denied - this does not run as root, so the certbot deploy hook has to copy the pair somewhere it can read (see server/README.md)"
       : e.code === "ENOENT"
-        ? "no such file - check TLS_CERT and TLS_KEY in server/.env"
+        ? "not issued yet, or TLS_CERT / TLS_KEY in server/.env point somewhere else"
         : e.message));
-    process.exit(1);
+    console.error("[tempest] serving PLAIN HTTP on " + HTTP_PORT
+      + " so an ACME challenge can be answered. It will serve HTTPS as soon as a"
+      + " certificate exists and this service restarts.");
   }
+}
+
+if (creds) {
   servers.push(https.createServer(creds, handler).listen(HTTPS_PORT, BIND, () =>
     console.log("[tempest] site + API on https://" + BIND + ":" + HTTPS_PORT)));
 
@@ -287,6 +294,11 @@ if (TLS_ON) {
     res.end();
   }).listen(HTTP_PORT, BIND, () =>
     console.log("[tempest] redirect + ACME on http://" + BIND + ":" + HTTP_PORT)));
+} else if (TLS_ON) {
+  // bootstrap: TLS is wanted but not yet possible
+  servers.push(http.createServer(handler).listen(HTTP_PORT, BIND, () =>
+    console.log("[tempest] site + API + ACME on http://" + BIND + ":" + HTTP_PORT
+      + "  (no certificate yet)")));
 } else {
   servers.push(http.createServer(handler).listen(PORT, BIND, () =>
     console.log("[tempest] site + API on http://" + BIND + ":" + PORT)));

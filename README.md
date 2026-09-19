@@ -322,8 +322,9 @@ without touching the file.
 
 ### Where the data comes from
 
-Point the two tabs at whatever is serving the plugin data, in
-`management.js`:
+With `apiBase` set (including `"same-origin"`), both tabs fill themselves in
+and the two URLs below can stay blank. Set them only to read from something
+other than the relay API:
 
 ```js
 recordingsUrl: "https://example.net/api/recordings",

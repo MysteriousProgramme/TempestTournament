@@ -308,34 +308,59 @@ or take the Pages deployment down.
 
 ### 9. Point the plugins at it
 
-**Perspective** (`plugins/Perspective/config.yml`):
+Both plugins take a **base URL** and append their own paths — do not put
+`/api/recordings` or anything else on the end. Both are also `enabled: false`
+by default, so setting the URL alone does nothing.
+
+Read your ingest key off the box:
+
+```bash
+sudo grep '^INGEST_KEY=' /opt/tempest/server/.env
+```
+
+**Perspective** — `plugins/Perspective/config.yml` on the game server:
 
 ```yaml
 web:
-  url: https://43-210-250-181.sslip.io/api/recordings
-  requests-url: https://43-210-250-181.sslip.io/api/requests
-  ingest-key: <the INGEST_KEY from server/.env>
+  enabled: true
+  url: "https://43-210-250-181.sslip.io"
+  ingest-key: "<INGEST_KEY>"
+  include-transcripts: false
   on-demand: true
+  pull-interval-seconds: 10
+  allow-insecure: false
 ```
 
-**TempestAC** (`plugins/TempestAC/config.yml`):
+`include-transcripts: false` with `on-demand: true` is the pairing that keeps
+chat and commands on the game server until the site actually asks for a
+specific recording. See the note about `autoRequestTranscripts` above: with it
+on, the site asks for everything as soon as a mod opens the tab.
+
+**TempestAC** — `plugins/TempestAC/config.yml`:
 
 ```yaml
 web:
-  url: https://43-210-250-181.sslip.io
-  key: <the same INGEST_KEY>
+  enabled: true
+  url: "https://43-210-250-181.sslip.io"
+  ingest-key: "<INGEST_KEY>"
+  batch-seconds: 5
 ```
 
-Restart the game server, then watch the box see them arrive:
+Note it is `ingest-key`, not `key`, and the same value as Perspective's.
+
+Both connect **outbound only**, so the game server needs no inbound ports and
+can stay where it is. Both also refuse to send an ingest key over plain `http`
+to a remote host, which is one more reason the certificate matters.
+
+Restart the game server, then watch them arrive:
 
 ```bash
 sudo journalctl -u tempest -f
 ```
 
-Both connect **outbound**, so the game server needs no inbound ports and can
-stay on RavenNodes.
-
----
+You want `POST /api/flags 200` and `POST /api/reconcile 200` within a minute or
+so, then `POST /api/recordings 200` as recordings finish. After that they show
+up under **Management** on the site.
 
 ## Updating
 

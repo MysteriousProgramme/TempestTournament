@@ -203,6 +203,95 @@ Elastic IP is no longer attached to it, so terminating costs you nothing.
 
 ---
 
+## Removing Tempest from a box
+
+Do this **after** the new instance is verified, not before — or at minimum
+after step 3 above, so you still hold the tarballs.
+
+Everything below is scoped to Tempest. Nothing else on the machine is touched,
+which matters if the box runs anything else.
+
+### 1. Back up, unless you truly mean to lose it
+
+```bash
+sudo systemctl stop tempest
+sudo tar czf /tmp/tempest-move.tgz -C /opt/tempest/server data .env
+sudo tar czf /tmp/tempest-le.tgz -C /etc letsencrypt
+sudo chown "$USER":"$USER" /tmp/tempest-*.tgz
+```
+
+Copy both off the machine before continuing. `data` holds every account,
+verdict and recording; `.env` holds the ingest key the game server is
+configured with.
+
+### 2. The service
+
+```bash
+sudo systemctl disable --now tempest
+sudo rm -f /etc/systemd/system/tempest.service
+sudo systemctl daemon-reload
+sudo systemctl reset-failed tempest 2>/dev/null || true
+```
+
+### 3. The certificate and its hook
+
+Skip this if you are keeping the hostname and reissuing elsewhere is
+inconvenient — the certificate is portable, and you have it in the tarball.
+
+```bash
+sudo rm -f /etc/letsencrypt/renewal-hooks/deploy/tempest.sh
+sudo certbot delete --cert-name 43-210-250-181.sslip.io
+```
+
+`certbot delete` removes the local files only. There is nothing to revoke
+unless the private key leaked.
+
+### 4. The files and the user
+
+```bash
+sudo rm -rf /opt/tempest
+sudo userdel tempest
+sudo groupdel tempest 2>/dev/null || true
+```
+
+### 5. Undo the nginx changes, if any were made
+
+Only relevant if you followed an earlier version of these instructions, which
+briefly used nginx as a reverse proxy:
+
+```bash
+sudo rm -f /etc/nginx/conf.d/tempest.conf
+ls -la /etc/nginx/sites-enabled/
+```
+
+If `default` is missing from `sites-enabled` and present in `sites-available`,
+put the symlink back:
+
+```bash
+sudo ln -sfn /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
+```
+
+### What is deliberately left alone
+
+- **Node.js** — other things on the box may use it, and removing or downgrading
+  it is far more likely to break something than to help.
+- **certbot** and **nginx** as packages, and every nginx config that is not
+  Tempest's.
+- **Anything listening on other ports.** Tempest used 8791, then 80 and 443.
+- **`/etc/letsencrypt` as a whole** — step 3 removes one lineage, not the
+  directory, so other certificates on the box survive.
+
+### Confirm it is gone
+
+```bash
+systemctl status tempest 2>&1 | head -3      # "could not be found"
+ls /opt/tempest 2>&1                         # "No such file or directory"
+id tempest 2>&1                              # "no such user"
+sudo ss -ltnp | grep -E ':(80|443|8791) '    # nothing of ours
+```
+
+---
+
 ## If you cannot keep the Elastic IP
 
 Then the hostname changes, and four things change with it:

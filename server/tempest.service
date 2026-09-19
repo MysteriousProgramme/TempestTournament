@@ -54,8 +54,15 @@ ProtectControlGroups=true
 RestrictSUIDSGID=true
 RestrictRealtime=true
 LockPersonality=true
-MemoryDenyWriteExecute=true
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# NOT MemoryDenyWriteExecute=true. It forbids memory that is both writable and
+# executable, which is precisely what V8's JIT allocates - Node dies on start
+# with SIGTRAP and a core dump. Correct for a C daemon, fatal for a JIT runtime.
+
+# AF_NETLINK is in the list because glibc's getaddrinfo uses it to enumerate
+# interfaces; without it name resolution can fail in ways that look like a
+# network outage.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 SystemCallFilter=@system-service
 SystemCallErrorNumber=EPERM
 

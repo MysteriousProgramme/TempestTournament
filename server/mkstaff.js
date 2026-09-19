@@ -19,9 +19,11 @@
    The password is an argument, so it lands in your shell history. Clear it
    afterwards, or put a space before the command if your shell is set to skip
    those (HISTCONTROL=ignorespace).
+
+   ESM, not CommonJS - server/package.json sets "type": "module".
    ============================================================ */
 
-const c = require("crypto");
+import c from "node:crypto";
 const [user, role, pw] = process.argv.slice(2);
 if (!user || !role || !pw) { console.error("usage: node mkstaff.js <username> <role> <password>"); process.exit(1); }
 const LEVEL = { player:0, staff:1, headstaff:2, mod:3, headmod:4, manager:5, owner:6, founder:7 };

@@ -3,8 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TSMP Tournament Maker</title>
+  <title>Tempest</title>
+  <meta name="description" content="Tempest SMP and Tempest PvP/FFA. Browse the servers, see the roster, and run tournaments with broadcast-ready brackets." />
+  <link rel="icon" type="image/png" href="assets/icon.png" />
+  <link rel="apple-touch-icon" href="assets/icon.png" />
   <link rel="preconnect" href="https://mc-heads.net" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Saira:wght@400;600;700;800&display=swap" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -15,22 +21,189 @@
   <!-- ===================== NAV ===================== -->
   <header class="nav">
     <div class="nav-inner">
-      <a class="brand" href="#" data-nav="setup">
-        <span class="brand-mark">⚔</span>
-        <span class="brand-text">TSMP<span class="brand-accent">Tournament</span></span>
-      </a>
-      <nav class="nav-links">
-        <button class="nav-link active" data-nav="setup">Setup</button>
-        <button class="nav-link" data-nav="bracket">Bracket</button>
-      </nav>
-      <button class="btn btn-ghost btn-sm" id="resetAll">Reset</button>
+      <div class="nav-bar">
+        <a class="brand" href="#" data-nav="home">
+          <img class="brand-mark" src="assets/icon.png" alt="" />
+          <span class="brand-text">Tempest</span>
+        </a>
+        <nav class="nav-links">
+          <button class="nav-link active" data-nav="home">Home</button>
+          <button class="nav-link" data-nav="servers">Servers</button>
+          <button class="nav-link" data-nav="events">Events</button>
+          <div class="nav-group" id="navTournament">
+            <button class="nav-link nav-group-btn" type="button" aria-expanded="false" aria-haspopup="true">
+              Tournament<span class="nav-caret" aria-hidden="true"></span>
+            </button>
+            <div class="nav-menu" role="menu">
+              <button class="nav-menu-item" data-nav="bracket" role="menuitem">Bracket</button>
+              <button class="nav-menu-item" data-nav="participants" role="menuitem">Participants</button>
+              <button class="nav-menu-item" data-nav="setup" data-cap="tournament.create" role="menuitem">Tournament Maker</button>
+            </div>
+          </div>
+          <div class="nav-group" id="navBroadcast">
+            <button class="nav-link nav-group-btn" type="button" aria-expanded="false" aria-haspopup="true">
+              Broadcast<span class="nav-caret" aria-hidden="true"></span>
+            </button>
+            <div class="nav-menu" role="menu">
+              <button class="nav-menu-item" data-nav="next" data-cap="broadcast" role="menuitem">Next Match</button>
+              <button class="nav-menu-item" data-nav="schedule" data-cap="broadcast" role="menuitem">Schedule</button>
+            </div>
+          </div>
+          <div class="nav-group" id="navManagement">
+            <button class="nav-link nav-group-btn" type="button" aria-expanded="false" aria-haspopup="true">
+              Management<span class="nav-caret" aria-hidden="true"></span>
+            </button>
+            <div class="nav-menu" role="menu">
+              <button class="nav-menu-item" data-nav="perspective" data-cap="management.perspective" role="menuitem">Perspective</button>
+              <button class="nav-menu-item" data-nav="anticheat" data-cap="management.anticheat" role="menuitem">AntiCheat</button>
+            </div>
+          </div>
+          <button class="nav-link" data-nav="staff" data-cap="staff.dashboard">Staff</button>
+        </nav>
+        <div class="nav-right">
+          <button class="role-chip hidden" id="roleChip" type="button" title="Your profile">
+            <span class="role-gem" id="roleGem"></span>
+            <span class="role-name" id="roleName">Player</span>
+            <span class="role-user" id="roleLabel"></span>
+          </button>
+          <button class="btn btn-ghost btn-sm signin" id="roleSwitch" type="button">Log in</button>
+          <button class="btn btn-primary btn-sm" id="signUpBtn" type="button">Sign up</button>
+          <button class="btn btn-ghost btn-sm" id="resetAll" data-cap="tournament.reset">Reset</button>
+        </div>
+      </div>
     </div>
   </header>
 
   <main class="page">
 
+    <!-- ===================== HOME VIEW ===================== -->
+    <section class="view" id="view-home">
+      <div class="well">
+        <div class="home-hero">
+          <span class="eyebrow">Tempest SMP &middot; Tempest PvP/FFA</span>
+          <h1 class="hero-title">Run the <span class="grad">whole tournament</span></h1>
+          <p class="hero-sub">Home of Tempest SMP and Tempest PvP/FFA. Browse the servers, check the roster, and run a tournament with brackets that keep themselves up to date.</p>
+          <div class="home-cta">
+            <button class="btn btn-primary btn-lg" data-nav="setup" data-cap="tournament.create">Build a bracket</button>
+            <button class="btn btn-ghost btn-lg" data-nav="servers">Browse servers</button>
+            <button class="btn btn-ghost btn-lg" data-nav="bracket">View the bracket</button>
+          </div>
+        </div>
+
+        <hr class="well-divider" />
+
+        <span class="section-eyebrow">Where you play</span>
+        <h2 class="section-h2">Featured servers</h2>
+        <div class="srv-featured" id="homeServers"><!-- injected --></div>
+
+        <hr class="well-divider" />
+
+        <div class="home-features">
+          <button class="feature" data-nav="bracket">
+            <span class="feature-title">Tournament Bracket</span>
+            <span class="feature-sub">Single and double elimination, round robin, Swiss, or groups into a playoff. Click a name to advance it; the bracket, the schedule and the face-off card all follow.</span>
+            <span class="feature-go">Open the bracket &rarr;</span>
+          </button>
+          <button class="feature alt" data-nav="setup" data-cap="tournament.create">
+            <span class="feature-title">Tournament Maker</span>
+            <span class="feature-sub">Add players with their tier and team, auto-match them into fair opening rounds, pick the gamemode, and generate the whole thing in one go.</span>
+            <span class="feature-go">Start building &rarr;</span>
+          </button>
+        </div>
+
+        <hr class="well-divider" />
+
+        <span class="section-eyebrow">Four steps</span>
+        <h2 class="section-h2">How it works</h2>
+        <div class="steps" style="margin-top:16px">
+          <div class="step">
+            <div class="step-n">1</div>
+            <div class="step-t">Pick a server</div>
+            <div class="step-d">Choose where the matches are played, and it travels with the tournament.</div>
+          </div>
+          <div class="step">
+            <div class="step-n">2</div>
+            <div class="step-t">Add your fighters</div>
+            <div class="step-d">Usernames pull skins automatically. Set a tier and team to auto-match fairly.</div>
+          </div>
+          <div class="step">
+            <div class="step-n">3</div>
+            <div class="step-t">Generate the bracket</div>
+            <div class="step-d">Five formats, seeded and byed correctly, with best-of series where you want them.</div>
+          </div>
+          <div class="step">
+            <div class="step-n">4</div>
+            <div class="step-t">Run the broadcast</div>
+            <div class="step-d">Share a live link, download the bracket, and pull schedule and face-off graphics.</div>
+          </div>
+        </div>
+
+        <hr class="well-divider" />
+
+        <span class="section-eyebrow">Supported</span>
+        <h2 class="section-h2">Gamemodes</h2>
+        <div class="home-modes" id="homeModes" style="margin-top:16px"><!-- injected --></div>
+      </div>
+    </section>
+
+    <!-- ===================== SERVERS VIEW ===================== -->
+    <section class="view hidden" id="view-servers">
+      <div class="hero">
+        <span class="eyebrow">Server Directory</span>
+        <h1 class="hero-title">Where you <span class="grad">play</span></h1>
+        <p class="hero-sub">Servers you can run a Tempest tournament on. Status is checked live — copy an address to join, or set one as the home of your next bracket.</p>
+      </div>
+
+      <div class="well">
+        <span class="section-eyebrow">Pick of the list</span>
+        <h2 class="section-h2" style="margin-bottom:16px">Featured</h2>
+        <div class="srv-featured" id="srvFeatured"><!-- injected --></div>
+
+        <hr class="well-divider" />
+
+        <div class="part-head">
+          <div class="part-head-info">
+            <span class="section-eyebrow">Every server</span>
+            <h2 class="section-h2">All servers</h2>
+            <p class="hint" id="srvHint">Live player counts come from a public status API and are cached for a minute.</p>
+          </div>
+          <div class="part-head-actions">
+            <button class="btn btn-primary btn-sm" id="srvAdd" type="button" data-cap="servers.manage">Add a server</button>
+            <button class="btn btn-ghost btn-sm" id="srvReset" type="button" data-cap="servers.manage">Reset list</button>
+          </div>
+        </div>
+        <div class="srv-list" id="srvList"><!-- injected --></div>
+      </div>
+    </section>
+
+    <!-- ===================== PARTICIPANTS VIEW ===================== -->
+    <section class="view hidden" id="view-participants">
+      <div class="hero">
+        <span class="eyebrow">Roster</span>
+        <h1 class="hero-title">The <span class="grad">participants</span></h1>
+        <p class="hero-sub">Everyone entered in the tournament, with their team, tier, and who they are on Discord.</p>
+      </div>
+
+      <div class="well">
+        <div class="part-head">
+          <div class="part-head-info">
+            <span class="section-eyebrow">Entered</span>
+            <h2 class="section-h2">Participants <span class="count-pill" id="partCount">0</span></h2>
+            <p class="hint" id="partStats"></p>
+          </div>
+          <div class="part-head-actions">
+            <input type="search" id="partSearch" class="input" placeholder="Search name, team or Discord" />
+            <button class="btn btn-ghost btn-sm" id="partCopy" type="button">Copy Discord list</button>
+            <button class="btn btn-primary btn-sm" data-nav="setup" data-cap="participants.manage">Add participants</button>
+          </div>
+        </div>
+
+        <div class="part-list" id="partList"><!-- injected --></div>
+      </div>
+    </section>
+
     <!-- ===================== SETUP VIEW ===================== -->
-    <section class="view" id="view-setup">
+    <section class="view hidden" id="view-setup">
       <div class="hero">
         <span class="eyebrow">COMPETITIVE TOURNAMENT BUILDER</span>
         <h1 class="hero-title">Build Your <span class="grad">Championship</span></h1>
@@ -46,6 +219,10 @@
             <input type="text" id="tName" class="input" placeholder="Tempest Summer Championship" maxlength="48" />
           </label>
 
+          <div class="field">
+            <span class="field-label">Server</span>
+            <div id="setupServer"><!-- injected --></div>
+          </div>
           <div class="field">
             <span class="field-label">Bracket Type</span>
             <div class="chip-row" id="bracketTypes">
@@ -137,7 +314,12 @@
               <img id="addPreviewImg" alt="" src="" />
               <span class="add-preview-fallback">?</span>
             </div>
-            <input type="text" id="playerInput" class="input" placeholder="Minecraft username…" maxlength="16" />
+            <div class="add-fields">
+              <input type="text" id="playerInput" class="input" placeholder="Minecraft username…" maxlength="16" />
+              <input type="text" id="teamInput" class="input" placeholder="Team / clan" maxlength="20" />
+              <select class="input select" id="tierInput" title="Tier in this gamemode"></select>
+              <input type="text" id="discordInput" class="input dc-input" placeholder="Discord username or ID (optional)" maxlength="40" />
+            </div>
             <button type="submit" class="btn btn-primary" id="addPlayerBtn">Add</button>
           </form>
           <p class="hint" id="addHint">Type a Minecraft username — the skin head loads automatically.</p>
@@ -151,6 +333,8 @@
               <button class="step-btn sm" id="samplePlus" type="button">+</button>
               <button class="btn btn-ghost btn-sm" id="seedSample">Add samples</button>
             </div>
+            <button class="btn btn-ghost btn-sm" id="autoMatch">Auto match by tier</button>
+            <button class="btn btn-ghost btn-sm" id="shufflePlayers">Shuffle</button>
             <button class="btn btn-ghost btn-sm" id="clearPlayers">Clear all</button>
           </div>
           <p class="hint" id="sampleAvail"></p>
@@ -169,6 +353,7 @@
         <div>
           <span class="eyebrow" id="bracketMode">MODE</span>
           <h1 class="bracket-title" id="bracketName">Tournament</h1>
+          <div id="bracketServer"></div>
         </div>
         <div class="bracket-actions">
           <div class="champion-badge hidden" id="championBadge">
@@ -178,21 +363,369 @@
               <span id="champName">—</span>
             </div>
           </div>
-          <button class="btn btn-ghost" id="backToSetup">Edit Setup</button>
+          <button class="live-chip hidden" id="liveChip" type="button">
+            <span class="live-dot"></span><span id="liveChipText">Live</span>
+          </button>
+          <button class="btn btn-ghost btn-sm" id="splitToggle" type="button">Classic view</button>
+          <button class="btn btn-ghost btn-sm" id="bracketDownload" type="button">Download PNG</button>
+          <button class="btn btn-ghost btn-sm" id="shareBtn" type="button" data-cap="tournament.share">Share link</button>
+          <button class="btn btn-ghost" id="backToSetup" data-cap="tournament.create">Edit Setup</button>
         </div>
+      </div>
+
+      <div class="view-only-note hidden" id="viewOnlyNote">
+        <span class="vo-badge">VIEW ONLY</span>
+        <span id="viewOnlyText">You're viewing a shared bracket. Results are set by the tournament admin.</span>
       </div>
 
       <div class="bracket-scroll" id="bracketScroll">
         <!-- bracket / round robin injected here -->
       </div>
     </section>
+
+    <!-- ===================== NEXT MATCH VIEW ===================== -->
+    <section class="view hidden" id="view-next">
+      <div class="hero">
+        <span class="eyebrow">BROADCAST GRAPHICS</span>
+        <h1 class="hero-title">Next <span class="grad">Match</span></h1>
+        <p class="hero-sub">A live face-off card for the next match to be played — it advances automatically as results are recorded on the bracket.</p>
+      </div>
+
+      <div class="sched-empty hidden" id="nextEmpty">
+        <p>No upcoming match yet — add players and generate a bracket on the <button class="linkish" data-nav="setup">Setup</button> tab, then record results on the <button class="linkish" data-nav="bracket">Bracket</button> tab.</p>
+      </div>
+
+      <div class="board-stage hidden" id="nextStage">
+        <div class="board-toolbar">
+          <span class="board-toolbar-title" id="nextTitle">Next match</span>
+          <div class="board-toolbar-actions">
+            <button class="btn btn-ghost btn-sm" id="nextZoom" type="button">Full size</button>
+            <button class="btn btn-ghost btn-sm" id="nextDownload" type="button">Download PNG</button>
+          </div>
+        </div>
+        <div class="board-wrap" id="nextWrap">
+          <!-- .vsboard injected here -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== SCHEDULE VIEW ===================== -->
+    <section class="view hidden" id="view-schedule">
+      <div class="hero">
+        <span class="eyebrow">BROADCAST GRAPHICS</span>
+        <h1 class="hero-title">Schedule <span class="grad">Board</span></h1>
+        <p class="hero-sub">Pick a date and the matches happening that day, then generate a broadcast-ready schedule board for your stream.</p>
+      </div>
+
+      <div class="sched-empty hidden" id="schedEmpty">
+        <p>Generate a bracket first — add at least 2 players on the <button class="linkish" data-nav="setup">Setup</button> tab, and your matches will appear here to schedule.</p>
+      </div>
+
+      <div class="sched-grid" id="schedGrid">
+        <!-- LEFT: builder -->
+        <div class="panel sched-builder">
+          <h3 class="panel-title">Board details</h3>
+          <div class="field-grid">
+            <label class="field"><span>Event name</span>
+              <input type="text" id="sbEvent" class="input" placeholder="Tempest PVP" maxlength="40" />
+            </label>
+            <label class="field"><span>Hosted by</span>
+              <input type="text" id="sbHost" class="input" placeholder="Tubbo" maxlength="30" />
+            </label>
+            <label class="field"><span>Event dates (footer)</span>
+              <input type="text" id="sbRange" class="input" placeholder="July 16-18, 2026" maxlength="40" />
+            </label>
+            <label class="field field-sm"><span>Day #</span>
+              <input type="number" id="sbDay" class="input" min="1" value="1" />
+            </label>
+            <label class="field field-sm"><span>Date</span>
+              <input type="date" id="sbDate" class="input" />
+            </label>
+            <label class="field field-wide"><span>Times (one per line)</span>
+              <textarea id="sbTimes" class="input" rows="3" placeholder="9:00 PST&#10;12:00 EST&#10;17:00 BST"></textarea>
+            </label>
+          </div>
+
+          <h3 class="panel-title">Matches this day</h3>
+          <div class="sched-matchbar">
+            <button class="btn btn-ghost btn-sm" id="sbAll" type="button">Select all</button>
+            <button class="btn btn-ghost btn-sm" id="sbNone" type="button">Clear</button>
+            <span class="sched-count" id="sbCount">0 selected</span>
+          </div>
+          <ul class="sched-matchlist" id="sbMatchList"></ul>
+
+          <div class="sched-actions">
+            <button class="btn btn-primary btn-lg" id="sbGenerate">Generate &amp; Save Board</button>
+          </div>
+          <p class="hint" id="sbHint"></p>
+        </div>
+
+        <!-- RIGHT: saved boards -->
+        <div class="panel sched-saved">
+          <h3 class="panel-title">Saved boards</h3>
+          <ul class="sched-saved-list" id="sbSavedList"></ul>
+          <p class="hint" id="sbSavedHint">No boards saved yet.</p>
+        </div>
+      </div>
+
+      <!-- rendered board preview -->
+      <div class="board-stage hidden" id="sbStage">
+        <div class="board-toolbar">
+          <span class="board-toolbar-title" id="sbStageTitle">Schedule board</span>
+          <div class="board-toolbar-actions">
+            <button class="btn btn-ghost btn-sm" id="sbZoom" type="button">Full size</button>
+            <button class="btn btn-ghost btn-sm" id="sbDownload" type="button">Download PNG</button>
+          </div>
+        </div>
+        <div class="board-wrap" id="sbBoardWrap">
+          <!-- .sboard injected here -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== STAFF VIEW ===================== -->
+    <section class="view hidden" id="view-staff">
+      <div class="hero">
+        <span class="eyebrow">The team</span>
+        <h1 class="hero-title">Tempest <span class="grad">staff</span></h1>
+        <p class="hero-sub">Accounts and roles. Staff log in with the username and password you set for them here; players sign themselves up.</p>
+      </div>
+
+      <div class="well">
+        <div class="sub-tabs" id="staffSubTabs" role="tablist"><!-- injected --></div>
+
+        <div class="sub-panel" data-sub="dashboard" data-cap="staff.dashboard">
+        <div class="dash-tiles" id="dashTiles"><!-- injected --></div>
+
+        <hr class="well-divider" />
+
+        <div class="part-head">
+          <div class="part-head-info">
+            <span class="section-eyebrow">Dashboard</span>
+            <h2 class="section-h2">Needs a look</h2>
+            <p class="hint" id="caseStats"></p>
+          </div>
+          <div class="part-head-actions">
+            <select id="caseFilter" class="input select">
+              <option value="open">Open</option>
+              <option value="claimed">Claimed</option>
+              <option value="resolved">Resolved</option>
+              <option value="">Everything</option>
+            </select>
+            <button class="btn btn-ghost btn-sm" id="caseRefresh" type="button">Refresh</button>
+          </div>
+        </div>
+
+        <div class="case-list" id="caseList"><!-- injected --></div>
+
+        <hr class="well-divider" />
+
+        <span class="section-eyebrow">Recent</span>
+        <h2 class="section-h2">Latest replays</h2>
+        <div class="dash-replays" id="dashReplays"><!-- injected --></div>
+        </div><!-- /dashboard -->
+
+        <div class="sub-panel sub-off" data-sub="permissions" data-cap="staff.dashboard">
+        <div class="part-head">
+          <div class="part-head-info">
+            <span class="section-eyebrow">Who can do what</span>
+            <h2 class="section-h2">Permissions</h2>
+            <p class="hint" id="permHint"></p>
+          </div>
+          <div class="part-head-actions" data-cap="staff.manage">
+            <button class="btn btn-ghost btn-sm" id="permExport" type="button" title="The window.TEMPEST_CAPABILITIES block for staff.js">Copy permissions</button>
+            <button class="btn btn-ghost btn-sm" id="permResetAll" type="button">Reset all</button>
+          </div>
+        </div>
+        <div class="perm-matrix" id="permMatrix"><!-- injected --></div>
+        <p class="hint staff-note" id="permNote"></p>
+        </div><!-- /permissions -->
+
+        <div class="sub-panel sub-off" data-sub="accounts" data-cap="staff.manage">
+        <div class="part-head">
+          <div class="part-head-info">
+            <span class="section-eyebrow">Accounts</span>
+            <h2 class="section-h2">Everyone</h2>
+            <p class="hint" id="staffStats"></p>
+          </div>
+          <div class="part-head-actions">
+            <button class="btn btn-primary btn-sm" id="staffAdd" type="button">Add staff account</button>
+            <button class="btn btn-ghost btn-sm" id="staffExport" type="button">Copy accounts</button>
+            <button class="btn btn-ghost btn-sm" id="staffServerExport" type="button" title="The STAFF_JSON secret for the relay API">Copy server staff</button>
+          </div>
+        </div>
+
+        <div class="staff-list" id="staffList"><!-- injected --></div>
+
+        <p class="hint staff-note">
+          Roles run Staff, Head Staff, Mod, Head Mod, Manager, Owner, Founder. Owner and
+          Founder bypass every permission check. Accounts created here live in this browser
+          only &mdash; hit <b>Copy accounts</b> and paste the result into
+          <code>staff.js</code> so they work on every device.
+        </p>
+
+        </div><!-- /accounts -->
+
+        <div class="sub-panel sub-off" data-sub="appearance" data-cap="staff.manage">
+        <div class="part-head">
+          <div class="part-head-info">
+            <span class="section-eyebrow">Appearance</span>
+            <h2 class="section-h2">Role colours</h2>
+            <p class="hint">Two stops per role, always left to right. Changes show up instantly and save to this browser.</p>
+          </div>
+          <div class="part-head-actions">
+            <button class="btn btn-ghost btn-sm" id="roleExport" type="button">Copy roles</button>
+            <button class="btn btn-ghost btn-sm" id="roleResetAll" type="button">Reset all</button>
+          </div>
+        </div>
+
+        <div class="role-editor" id="roleEditor"><!-- injected --></div>
+
+        <p class="hint staff-note">
+          Colours picked here live in this browser too. <b>Copy roles</b> gives you the
+          <code>window.TEMPEST_ROLES</code> block to paste into <code>staff.js</code> so
+          everyone sees them.
+        </p>
+        </div><!-- /appearance -->
+      </div>
+    </section>
+
+    <!-- ===================== EVENTS VIEW ===================== -->
+    <section class="view hidden" id="view-events">
+      <div class="hero">
+        <span class="eyebrow">Whats on</span>
+        <h1 class="hero-title">Tempest <span class="grad">events</span></h1>
+        <p class="hero-sub">Events and tournaments: when they are, where they are, who is running them and who is working them.</p>
+      </div>
+
+      <div class="well">
+        <div class="part-head">
+          <div class="part-head-info">
+            <span class="section-eyebrow">Calendar</span>
+            <h2 class="section-h2">Whats coming up</h2>
+            <p class="hint" id="eventStats"></p>
+          </div>
+          <div class="part-head-actions">
+            <button class="btn btn-primary btn-sm" id="eventAdd" type="button" data-cap-any="events.host|tournaments.host">Add to the calendar</button>
+          </div>
+        </div>
+
+        <div class="event-list" id="eventList"><!-- injected --></div>
+      </div>
+    </section>
+
+    <!-- ===================== PROFILE VIEW ===================== -->
+    <section class="view hidden" id="view-profile">
+      <div class="hero">
+        <span class="eyebrow">Your account</span>
+        <h1 class="hero-title">Your <span class="grad">profile</span></h1>
+        <p class="hero-sub">Who you are on Tempest, what you do at events, and what the site lets you do.</p>
+      </div>
+
+      <div class="well">
+        <div id="profileBody"><!-- injected --></div>
+
+        <hr class="well-divider" />
+
+        <span class="section-eyebrow">Who can do what</span>
+        <h2 class="section-h2">Permissions</h2>
+        <p class="hint">Every action the site gates, against the rank that unlocks it. The ones you hold are marked.</p>
+        <div class="perm-matrix" id="profilePerms"><!-- injected --></div>
+      </div>
+    </section>
+
+    <!-- ===================== PERSPECTIVE VIEW ===================== -->
+    <section class="view hidden" id="view-perspective">
+      <div class="hero">
+        <span class="eyebrow">Management</span>
+        <h1 class="hero-title">Perspective <span class="grad">replays</span></h1>
+        <p class="hero-sub">Every recording the server has kept, with the chat, commands, joins, leaves, deaths and flags that happened inside it.</p>
+      </div>
+
+      <div class="well">
+        <div class="part-head">
+          <div class="part-head-info">
+            <span class="section-eyebrow">Catalogue</span>
+            <h2 class="section-h2">Recordings</h2>
+            <p class="hint" id="perspectiveStats"></p>
+          </div>
+          <div class="part-head-actions">
+            <input type="search" id="perspectiveSearch" class="input" placeholder="Search number, world or player" />
+            <button class="btn btn-ghost btn-sm" id="perspectiveRefresh" type="button">Refresh</button>
+            <button class="btn btn-ghost btn-sm" id="perspectiveImport" type="button">Import</button>
+          </div>
+        </div>
+
+        <div class="mgmt-list" id="perspectiveList"><!-- injected --></div>
+      </div>
+    </section>
+
+    <!-- ===================== ANTICHEAT VIEW ===================== -->
+    <section class="view hidden" id="view-anticheat">
+      <div class="hero">
+        <span class="eyebrow">Management</span>
+        <h1 class="hero-title">AntiCheat <span class="grad">flags</span></h1>
+        <p class="hero-sub">Everything TempestAC has flagged. Filter by check or by player to follow one thread.</p>
+      </div>
+
+      <div class="well">
+        <div class="part-head">
+          <div class="part-head-info">
+            <span class="section-eyebrow">Violations</span>
+            <h2 class="section-h2">Flags</h2>
+            <p class="hint" id="anticheatStats"></p>
+          </div>
+          <div class="part-head-actions">
+            <select id="flagCheck" class="input select"></select>
+            <input type="search" id="flagPlayer" class="input" placeholder="Player" />
+            <button class="btn btn-ghost btn-sm" id="flagRefresh" type="button">Refresh</button>
+            <button class="btn btn-ghost btn-sm" id="flagImport" type="button">Import</button>
+          </div>
+        </div>
+
+        <div class="mgmt-list" id="anticheatList"><!-- injected --></div>
+      </div>
+    </section>
   </main>
+
+  <!-- ===================== FOOTER ===================== -->
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div>
+        <div class="footer-brand">
+          <img src="assets/icon.png" alt="" />
+          <span>Tempest</span>
+        </div>
+        <p class="footer-legal">
+          Tempest SMP and Tempest PvP/FFA. Not affiliated with Mojang or Microsoft.
+          Server status and Discord profiles are looked up through third-party public APIs.
+        </p>
+      </div>
+      <div class="footer-links">
+        <div class="footer-col">
+          <h4>Tournament</h4>
+          <button class="footer-link" data-nav="bracket">Bracket</button>
+          <button class="footer-link" data-nav="participants">Participants</button>
+          <button class="footer-link" data-nav="setup" data-cap="tournament.create">Tournament Maker</button>
+          <button class="footer-link" data-nav="schedule" data-cap="broadcast">Schedule</button>
+        </div>
+        <div class="footer-col">
+          <h4>Play</h4>
+          <button class="footer-link" data-nav="servers">Servers</button>
+          <button class="footer-link" data-nav="home">Home</button>
+        </div>
+      </div>
+    </div>
+  </footer>
 
   <!-- generic modal overlay -->
   <div class="modal-overlay hidden" id="modalOverlay">
     <div class="modal" id="modalBox"></div>
   </div>
 
+  <script src="staff.js"></script>
+  <script src="management.js"></script>
+  <script src="servers.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

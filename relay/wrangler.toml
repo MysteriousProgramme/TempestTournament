@@ -1,0 +1,55 @@
+name = "tempest-tournament-relay"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# One Durable Object per tournament id — strongly consistent, so a published
+# score shows up on the viewers' very next poll.
+[[durable_objects.bindings]]
+name = "TOURNAMENTS"
+class_name = "Tournament"
+
+# A single Durable Object holding the management catalogue: every Perspective
+# recording the plugin has pushed, and a bounded ring of TempestAC flags.
+[[durable_objects.bindings]]
+name = "CATALOG"
+class_name = "Catalog"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Tournament"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Catalog"]
+
+# Role level needed to READ management data. 3 is Mod on the shipped ladder.
+[vars]
+MIN_READ_LEVEL = "3"
+# Role level needed to change the site's capability ladder. 6 is Owner.
+MIN_MANAGE_LEVEL = "6"
+
+# ---------------------------------------------------------------------------
+# Secrets are NOT set here — they would end up in git. Set each one with
+# `npx wrangler secret put NAME` after the first deploy:
+#
+#   INGEST_KEY      must match Perspective's web.ingest-key. Lets the holder
+#                   write recordings and flags, so treat it like a password.
+#   SESSION_SECRET  any long random string; signs staff session tokens.
+#   STAFF_JSON      the staff list the API verifies logins against. Generate
+#                   it with "Copy server staff file" on the site's Staff tab.
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Fallback: if `wrangler deploy` rejects the Durable Objects above, delete the
+# durable_objects and migrations blocks and use a KV namespace instead. Create
+# it with
+#     npx wrangler kv namespace create TOURNAMENT_KV
+# and paste the printed id here:
+#
+# [[kv_namespaces]]
+# binding = "TOURNAMENT_KV"
+# id = "paste-the-id-wrangler-printed"
+#
+# KV is eventually consistent, so viewers can lag behind by up to a minute.
+# Note the management API needs the CATALOG Durable Object either way.
+# ---------------------------------------------------------------------------

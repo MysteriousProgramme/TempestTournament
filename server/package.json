@@ -1,0 +1,8 @@
+{
+  "name": "tempest-server",
+  "private": true,
+  "type": "module",
+  "description": "Serves the Tempest site and runs relay/worker.js on a normal Node host.",
+  "engines": { "node": ">=20" },
+  "scripts": { "start": "node server.js" }
+}

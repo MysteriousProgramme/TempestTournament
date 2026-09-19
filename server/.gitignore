@@ -1,0 +1,5 @@
+# Holds INGEST_KEY, SESSION_SECRET and the staff password hashes.
+.env
+
+# The live data: recordings, flags, accounts, cases, brackets.
+data/

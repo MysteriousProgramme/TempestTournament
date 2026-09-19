@@ -79,7 +79,8 @@ sslip.io is fine and you can move to a domain later.
 
 ## Setup on an instance you already have
 
-Assumes Amazon Linux 2023. Notes for Ubuntu are inline.
+Written for **Ubuntu 24.04 LTS**, which is what this deployment runs. Amazon
+Linux 2023 differences are noted inline — mostly `dnf` for `apt-get`.
 
 **Step 0 runs on your own machine. Everything from step 1 runs on the
 instance, over SSH.** Those are bash commands on Linux — pasting them into
@@ -115,17 +116,33 @@ Verify before you push if you like:
 git status --short            # neither should appear
 ```
 
-### 1. Node 20 or newer
+### 1. Packages
+
+Ubuntu 24.04 ships Node 18, which is end of life, so Node comes from NodeSource
+rather than the distro:
 
 ```bash
-node --version    # v20 or newer; 18 is end of life and untested here
+sudo apt-get update
+sudo apt-get install -y git nginx certbot python3-certbot-nginx
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt-get install -y nodejs
+node --version          # want v22.x
 ```
 
+<details><summary>Amazon Linux 2023</summary>
+
 ```bash
-# Amazon Linux 2023
-sudo dnf install -y nodejs npm git
-# Ubuntu — the distro package is usually too old
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs git
+sudo dnf install -y git nginx certbot python3-certbot-nginx nodejs22
+node --version
+```
+</details>
+
+While you are here, confirm the box really is on the Elastic IP the hostname is
+built from — if these disagree, certbot will fail and the site will be
+unreachable:
+
+```bash
+curl -s https://checkip.amazonaws.com     # expect 43.210.250.181
 ```
 
 ### 2. A user that owns nothing else
@@ -143,7 +160,7 @@ sudo chown tempest:tempest /opt/tempest
 ### 3. The code
 
 ```bash
-sudo -u tempest git clone <your-repo-url> /opt/tempest
+sudo -u tempest git clone https://github.com/MysteriousProgramme/TempestTournament.git /opt/tempest
 cd /opt/tempest
 ```
 
@@ -156,7 +173,7 @@ sudo -u tempest cp server/.env.example server/.env
 sudo -u tempest chmod 600 server/.env
 openssl rand -hex 32    # for INGEST_KEY
 openssl rand -hex 32    # for SESSION_SECRET
-sudo -u tempest $EDITOR server/.env
+sudo -u tempest nano server/.env
 ```
 
 `chmod 600` matters: the file holds the ingest key and the session secret.
@@ -216,8 +233,11 @@ regardless — but there is no reason to expose it.
 
 ### 7. nginx and TLS
 
+nginx and certbot went on in step 1. Ubuntu ships a default site that answers
+every hostname; drop it so there is no doubt which block certbot edits:
+
 ```bash
-sudo dnf install -y nginx certbot python3-certbot-nginx   # Ubuntu: apt-get
+sudo rm -f /etc/nginx/sites-enabled/default
 sudo cp server/nginx.conf.example /etc/nginx/conf.d/tempest.conf
 sudo nginx -t && sudo systemctl enable --now nginx
 sudo certbot --nginx -d 43-210-250-181.sslip.io --agree-tos --redirect -m <your-email>

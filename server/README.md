@@ -410,7 +410,8 @@ anyone has recorded.
 | Login does nothing, no error | Not a secure context — you are on `http://`, or on a bare IP. This is the one at the top of this file. |
 | certbot: "not a valid domain" on the EC2 name | Let's Encrypt blocks `amazonaws.com` hostnames. Use your own domain or `<ip>.sslip.io`. |
 | Log says "no usable TLS certificate ... serving PLAIN HTTP" | Normal before first issuance. If it persists after certbot succeeded, the deploy hook did not run — `sudo /etc/letsencrypt/renewal-hooks/deploy/tempest.sh` then restart. |
-| certbot: "Connection refused" fetching the challenge | Nothing is on port 80. Check `sudo systemctl status tempest` and that `curl -s localhost/health` answers. |
+| certbot: "Connection refused" fetching the challenge | Either nothing is on port 80, or it is bound to loopback. `curl -s localhost/health` working while the outside cannot reach it means `HOST=127.0.0.1` in `server/.env` — set `HOST=0.0.0.0`. Check with `sudo ss -ltnp \| grep ':80 '`. |
+| Same, and `HOST` is already `0.0.0.0` | The security group is not open on 80. |
 | Service exits with `EACCES` on listen | `AmbientCapabilities=CAP_NET_BIND_SERVICE` missing from the unit — that is what lets a non-root process bind 80 and 443. |
 | `EADDRINUSE` on 80 or 443 | Something else on the box already serves them. `sudo ss -ltnp \| grep -E ':(80\|443) '` to find it. |
 | certbot renewal fails months later | Port 80 stopped answering the challenge. `sudo certbot renew --dry-run` reproduces it; Tempest must be running for it to pass. |

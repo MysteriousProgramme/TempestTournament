@@ -261,6 +261,17 @@ const servers = [];
    certificate does not exist yet, and the only way to obtain one is to answer
    an ACME challenge over port 80 - so exiting here would make first issuance
    impossible. Serve HTTP instead, get the certificate, restart into HTTPS. */
+/* Serving the public while bound to loopback is silently broken: it answers
+   perfectly from the box and is unreachable from anywhere else, so the first
+   thing that fails is the ACME challenge, with a "connection refused" that
+   looks like a firewall. Say it plainly instead. */
+if (TLS_ON && (BIND === "127.0.0.1" || BIND === "localhost" || BIND === "::1")) {
+  console.error("[tempest] WARNING: HOST is " + BIND + ", so this is listening on loopback"
+    + " only and nothing outside this machine can reach it - including Let's Encrypt.");
+  console.error("[tempest] Set HOST=0.0.0.0 in server/.env unless something on this box"
+    + " really is proxying to it.");
+}
+
 let creds = null;
 if (TLS_ON) {
   try {

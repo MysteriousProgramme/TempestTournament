@@ -52,11 +52,11 @@ service that resolves `<ip>.sslip.io` straight to `<ip>` — no signup, no
 account, no DNS to configure:
 
 ```
-203.0.113.42.sslip.io  ->  203.0.113.42
+43-210-250-181.sslip.io  ->  43.210.250.181
 ```
 
-So with an Elastic IP of `203.0.113.42` your hostname is
-`203-0-113-42.sslip.io` (dashes and dots both work), and certbot issues for it
+That is this deployment: the Elastic IP `43.210.250.181` gives the hostname
+`43-210-250-181.sslip.io` (dashes and dots both work), and certbot issues for it
 normally. `nip.io` does the same thing if sslip.io is ever down.
 
 This is as close to "just use the Elastic IP" as it gets: the address is still
@@ -81,15 +81,21 @@ sslip.io is fine and you can move to a domain later.
 
 Assumes Amazon Linux 2023. Notes for Ubuntu are inline.
 
-Step 0 runs on your own machine. Everything from step 1 runs **on the
-instance**, over SSH, and uses two values — set them once per shell and the
-rest is copy-paste:
+**Step 0 runs on your own machine. Everything from step 1 runs on the
+instance, over SSH.** Those are bash commands on Linux — pasting them into
+PowerShell will not work.
 
-```bash
-IP=203.0.113.42                      # your Elastic IP
-HOST=${IP//./-}.sslip.io             # -> 203-0-113-42.sslip.io
-echo "$HOST"
-```
+This deployment is pinned to:
+
+| | |
+| --- | --- |
+| Elastic IP | `43.210.250.181` |
+| Hostname | `43-210-250-181.sslip.io` |
+| Site | `https://43-210-250-181.sslip.io` |
+
+The hostname is that IP with dashes, resolved by `sslip.io`, so there is no DNS
+to configure. If the Elastic IP ever changes, the hostname changes with it and
+every command below has to change too — that is the cost of not owning a domain.
 
 ### 0. Push the code first (on your own machine)
 
@@ -213,16 +219,19 @@ regardless — but there is no reason to expose it.
 ```bash
 sudo dnf install -y nginx certbot python3-certbot-nginx   # Ubuntu: apt-get
 sudo cp server/nginx.conf.example /etc/nginx/conf.d/tempest.conf
-sudo sed -i "s/tempest\.example\.com/$HOST/g" /etc/nginx/conf.d/tempest.conf
 sudo nginx -t && sudo systemctl enable --now nginx
-sudo certbot --nginx -d "$HOST" --agree-tos -m you@example.com --redirect
+sudo certbot --nginx -d 43-210-250-181.sslip.io --agree-tos --redirect -m <your-email>
 ```
+
+The config already carries your hostname, so there is nothing to edit. The
+`-m` address is only used by Let's Encrypt to warn you if a renewal ever fails
+— put your own in.
 
 certbot rewrites the file with the certificate paths and the HTTP redirect, and
 installs a renewal timer. Check it took:
 
 ```bash
-curl -sI "https://$HOST/health" | head -1     # expect HTTP/2 200
+curl -sI https://43-210-250-181.sslip.io/health | head -1    # expect HTTP/2 200
 systemctl list-timers | grep certbot
 ```
 
@@ -244,14 +253,12 @@ or take the Pages deployment down.
 
 ### 9. Point the plugins at it
 
-Substitute your own `$HOST` (e.g. `203-0-113-42.sslip.io`).
-
 **Perspective** (`plugins/Perspective/config.yml`):
 
 ```yaml
 web:
-  url: https://203-0-113-42.sslip.io/api/recordings
-  requests-url: https://203-0-113-42.sslip.io/api/requests
+  url: https://43-210-250-181.sslip.io/api/recordings
+  requests-url: https://43-210-250-181.sslip.io/api/requests
   ingest-key: <the INGEST_KEY from server/.env>
   on-demand: true
 ```
@@ -260,7 +267,7 @@ web:
 
 ```yaml
 web:
-  url: https://203-0-113-42.sslip.io
+  url: https://43-210-250-181.sslip.io
   key: <the same INGEST_KEY>
 ```
 

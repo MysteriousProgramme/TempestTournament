@@ -3,3 +3,9 @@
 
 # The live data: recordings, flags, accounts, cases, brackets.
 data/
+
+# Certificates copied in by the certbot deploy hook.
+tls/
+
+# ACME challenge webroot.
+acme/

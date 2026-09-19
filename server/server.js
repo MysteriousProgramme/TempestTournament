@@ -27,6 +27,7 @@
    ============================================================ */
 
 import http from "node:http";
+import https from "node:https";
 import path from "node:path";
 import { promises as fs } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -70,6 +71,33 @@ const DATA_DIR = path.resolve(HERE, env.DATA_DIR || "data");
    trims transcripts to MAX_RECORD_BYTES; this is the hard stop before that,
    so a runaway upload cannot exhaust memory. */
 const MAX_BODY = Number(env.MAX_BODY_BYTES || 16 * 1024 * 1024);
+
+/* ---------- TLS, without a reverse proxy ----------
+   nginx in front would do exactly one job: terminate TLS. Doing it here
+   instead means one process, one thing to restart, and - on a box that is
+   already running someone else's nginx - nothing of theirs to touch.
+
+   Set TLS_CERT and TLS_KEY and the server binds 443 for the site and 80 for
+   the redirect. Leave them unset and it stays plain HTTP on PORT, which is
+   what you want when something else really is terminating TLS in front. */
+const TLS_CERT = env.TLS_CERT || "";
+const TLS_KEY = env.TLS_KEY || "";
+const TLS_ON = !!(TLS_CERT && TLS_KEY);
+const HTTPS_PORT = Number(env.HTTPS_PORT || 443);
+const HTTP_PORT = Number(env.HTTP_PORT || 80);
+/* Serving the public directly means binding every interface; behind a proxy it
+   should stay on loopback. Default accordingly rather than making you think. */
+const BIND = env.HOST || (TLS_ON ? "0.0.0.0" : "127.0.0.1");
+
+/* Certbot writes its challenge under here and we serve it from there, so
+   renewal needs no port of its own and never needs this process stopped.
+
+   This is the WEBROOT, i.e. exactly what you pass to `certbot --webroot -w`.
+   Certbot appends .well-known/acme-challenge/ itself, so this reads the same
+   shape rather than a flat directory - otherwise renewal writes a file the
+   server never looks at, and fails in ninety days for no visible reason. */
+const ACME_DIR = path.resolve(HERE, env.ACME_DIR || "acme");
+const ACME_PREFIX = "/.well-known/acme-challenge/";
 
 env.TOURNAMENTS = namespace(path.join(DATA_DIR, "tournaments"), Tournament);
 env.CATALOG = namespace(path.join(DATA_DIR, "catalog"), Catalog);
@@ -122,6 +150,22 @@ async function serveStatic(req, res, pathname) {
   // after a deploy. HTML is never cached; the rest gets a few minutes.
   const cache = ext === ".html" ? "no-cache" : "public, max-age=300";
   send(res, 200, TYPES[ext] || "application/octet-stream", body, { "Cache-Control": cache });
+}
+
+/* The static handler refuses any path segment beginning with a dot, which
+   would include /.well-known - so ACME is handled here, before it, and only
+   for filenames in the token alphabet. */
+async function serveAcme(req, res, pathname) {
+  const name = pathname.slice(ACME_PREFIX.length);
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(name)) {
+    return send(res, 404, "text/plain; charset=utf-8", "Not found");
+  }
+  try {
+    const body = await fs.readFile(path.join(ACME_DIR, ".well-known", "acme-challenge", name));
+    send(res, 200, "text/plain; charset=utf-8", body);
+  } catch (e) {
+    send(res, 404, "text/plain; charset=utf-8", "Not found");
+  }
 }
 
 function send(res, status, type, body, extra) {
@@ -183,7 +227,7 @@ async function toWorker(req, res, url) {
 
 const isApi = p => p.startsWith("/api/") || p.startsWith("/t/") || p === "/health";
 
-const server = http.createServer(async (req, res) => {
+async function handler(req, res) {
   res.req = req;
   const started = Date.now();
   let url;
@@ -208,24 +252,61 @@ const server = http.createServer(async (req, res) => {
     console.log(req.method + " " + url.pathname + " " + res.statusCode
       + " " + (Date.now() - started) + "ms");
   }
-});
+}
+
+const servers = [];
+
+if (TLS_ON) {
+  /* The private key under /etc/letsencrypt is root-only by default, so "cannot
+     read it" is the single most likely thing to go wrong here. Say which file
+     and why, rather than dumping an ENOENT stack trace and exiting. */
+  let creds;
+  try {
+    creds = { cert: await fs.readFile(TLS_CERT), key: await fs.readFile(TLS_KEY) };
+  } catch (e) {
+    console.error("[tempest] cannot read the TLS " + (/key/i.test(e.path || "") ? "key" : "certificate")
+      + ": " + e.path);
+    console.error("[tempest] " + (e.code === "EACCES"
+      ? "permission denied - this process does not run as root, so copy the files somewhere it can read (see server/README.md)"
+      : e.code === "ENOENT"
+        ? "no such file - check TLS_CERT and TLS_KEY in server/.env"
+        : e.message));
+    process.exit(1);
+  }
+  servers.push(https.createServer(creds, handler).listen(HTTPS_PORT, BIND, () =>
+    console.log("[tempest] site + API on https://" + BIND + ":" + HTTPS_PORT)));
+
+  /* Port 80 exists only to answer ACME and to send everyone to HTTPS. It must
+     keep serving the challenge, or renewal fails in ninety days and the site
+     goes down on a Tuesday for no visible reason. */
+  servers.push(http.createServer((req, res) => {
+    res.req = req;
+    if (req.url && req.url.startsWith(ACME_PREFIX)) return serveAcme(req, res, req.url);
+    const host = (req.headers.host || "").replace(/:\d+$/, "");
+    res.writeHead(301, { Location: "https://" + host + req.url });
+    res.end();
+  }).listen(HTTP_PORT, BIND, () =>
+    console.log("[tempest] redirect + ACME on http://" + BIND + ":" + HTTP_PORT)));
+} else {
+  servers.push(http.createServer(handler).listen(PORT, BIND, () =>
+    console.log("[tempest] site + API on http://" + BIND + ":" + PORT)));
+}
 
 /* systemd sends SIGTERM on restart; finishing in-flight requests keeps a
    deploy from truncating a recording upload mid-flight. */
 for (const sig of ["SIGTERM", "SIGINT"]) {
   process.on(sig, () => {
     console.log("[tempest] " + sig + ", closing");
-    server.close(() => process.exit(0));
+    let left = servers.length;
+    servers.forEach(s => s.close(() => { if (--left === 0) process.exit(0); }));
     setTimeout(() => process.exit(0), 10000).unref();
   });
 }
 
-server.listen(PORT, HOST, () => {
-  console.log("[tempest] site + API on http://" + HOST + ":" + PORT);
-  console.log("[tempest] site root " + SITE_ROOT);
-  console.log("[tempest] data      " + DATA_DIR);
-  const missing = ["INGEST_KEY", "SESSION_SECRET", "STAFF_JSON"].filter(k => !env[k]);
-  if (missing.length) {
-    console.log("[tempest] NOT SET: " + missing.join(", ") + " - see server/.env.example");
-  }
-});
+console.log("[tempest] site root " + SITE_ROOT);
+console.log("[tempest] data      " + DATA_DIR);
+if (TLS_ON) console.log("[tempest] acme      " + ACME_DIR);
+const missing = ["INGEST_KEY", "SESSION_SECRET", "STAFF_JSON"].filter(k => !env[k]);
+if (missing.length) {
+  console.log("[tempest] NOT SET: " + missing.join(", ") + " - see server/.env.example");
+}

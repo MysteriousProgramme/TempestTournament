@@ -119,11 +119,11 @@ git status --short            # neither should appear
 ### 1. Packages
 
 Ubuntu 24.04 ships Node 18, which is end of life, so Node comes from NodeSource
-rather than the distro:
+rather than the distro. No nginx: Tempest terminates TLS itself.
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y git nginx certbot python3-certbot-nginx
+sudo apt-get install -y git certbot
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get install -y nodejs
 node --version          # want v22.x
@@ -132,7 +132,7 @@ node --version          # want v22.x
 <details><summary>Amazon Linux 2023</summary>
 
 ```bash
-sudo dnf install -y git nginx certbot python3-certbot-nginx nodejs22
+sudo dnf install -y git certbot nodejs22
 node --version
 ```
 </details>
@@ -223,40 +223,63 @@ In the EC2 console, on this instance's security group, allow inbound:
 
 | Port | Source | Why |
 | --- | --- | --- |
-| 80 | anywhere | certbot's challenge, and the redirect to HTTPS |
+| 80 | anywhere | the ACME challenge, and the redirect to HTTPS |
 | 443 | anywhere | the site |
 | 22 | your IP only | SSH |
 
-**Do this before the next step.** certbot proves you control the host by
-answering a request on port 80; if it is closed, issuance fails with a
-connection timeout that looks like a certbot bug and is not.
+**Do this before the next step.** Let's Encrypt proves you control the host by
+fetching a file over port 80; if it is closed, issuance fails with a connection
+timeout that looks like a certbot bug and is not.
 
-**Do not open 8791.** Node binds `127.0.0.1`, so it is unreachable from outside
-regardless — but there is no reason to expose it.
+### 7. TLS, with no reverse proxy
 
-### 7. nginx and TLS
+Tempest terminates TLS itself. There is no nginx here — it would have done
+exactly one job, and skipping it means one process to run and nothing else on
+the box to configure or disturb.
 
-nginx and certbot went on in step 1. Ubuntu ships a default site that answers
-every hostname; drop it so there is no doubt which block certbot edits:
-
-```bash
-sudo rm -f /etc/nginx/sites-enabled/default
-sudo cp server/nginx.conf.example /etc/nginx/conf.d/tempest.conf
-sudo nginx -t && sudo systemctl enable --now nginx
-sudo certbot --nginx -d 43-210-250-181.sslip.io --agree-tos --redirect -m <your-email>
-```
-
-The config already carries your hostname, so there is nothing to edit. The
-`-m` address is only used by Let's Encrypt to warn you if a renewal ever fails
-— put your own in.
-
-certbot rewrites the file with the certificate paths and the HTTP redirect, and
-installs a renewal timer. Check it took:
+Port 80 stays up purely to answer ACME challenges and redirect everything else
+to HTTPS, so **renewal never needs this service stopped and never needs a port
+of its own.**
 
 ```bash
-curl -sI https://43-210-250-181.sslip.io/health | head -1    # expect HTTP/2 200
-systemctl list-timers | grep certbot
+sudo apt-get install -y certbot
+sudo -u tempest mkdir -p /opt/tempest/server/acme /opt/tempest/server/tls
 ```
+
+Let's Encrypt keeps the private key root-only, and this service deliberately
+does not run as root — so a deploy hook copies each new certificate somewhere
+the service user can read and restarts it. Install that **before** issuing, and
+renewal is then automatic for good:
+
+```bash
+sudo install -m 755 /opt/tempest/server/certbot-deploy-hook.sh      /etc/letsencrypt/renewal-hooks/deploy/tempest.sh
+```
+
+Tempest has to be serving port 80 for the challenge to be answered, so start it
+first, then issue:
+
+```bash
+sudo systemctl restart tempest
+sudo certbot certonly --webroot -w /opt/tempest/server/acme      -d 43-210-250-181.sslip.io --agree-tos --no-eff-email -m <your-email>
+```
+
+The hook fires on success, copies the certificate and restarts Tempest onto
+HTTPS. Check:
+
+```bash
+curl -s https://43-210-250-181.sslip.io/health
+sudo systemctl list-timers | grep certbot     # renewal is scheduled
+```
+
+<details><summary>Dry-run the renewal (worth doing once)</summary>
+
+```bash
+sudo certbot renew --dry-run
+```
+
+This proves the challenge still gets answered with the service running, which
+is the thing that quietly breaks ninety days later.
+</details>
 
 ### 8. Point the site at itself
 
@@ -355,6 +378,9 @@ anyone has recorded.
   long transcripts came through truncated with `eventsTruncated: true`.
   `MAX_RECORD_BYTES` in `server/.env` now sets it; the default here is 2 MiB.
 - **One origin.** No CORS, one certificate, one restart.
+- **No reverse proxy.** Tempest terminates TLS itself, so there is no nginx to
+  install, configure or keep in step — which also means it can sit on a box
+  that is already running someone else's web server without touching it.
 - **The data is yours**, in files you can read, back up and grep.
 
 ## What it costs you
@@ -374,6 +400,10 @@ anyone has recorded.
 | --- | --- |
 | Login does nothing, no error | Not a secure context — you are on `http://`, or on a bare IP. This is the one at the top of this file. |
 | certbot: "not a valid domain" on the EC2 name | Let's Encrypt blocks `amazonaws.com` hostnames. Use your own domain or `<ip>.sslip.io`. |
+| Service exits: "cannot read the TLS key ... permission denied" | The deploy hook has not run, so `server/tls/` is empty or root-owned. Run it by hand: `sudo /etc/letsencrypt/renewal-hooks/deploy/tempest.sh`. |
+| Service exits with `EACCES` on listen | `AmbientCapabilities=CAP_NET_BIND_SERVICE` missing from the unit — that is what lets a non-root process bind 80 and 443. |
+| `EADDRINUSE` on 80 or 443 | Something else on the box already serves them. `sudo ss -ltnp \| grep -E ':(80\|443) '` to find it. |
+| certbot renewal fails months later | Port 80 stopped answering the challenge. `sudo certbot renew --dry-run` reproduces it; Tempest must be running for it to pass. |
 | `413` on recording ingest | `client_max_body_size` in nginx is below the recording size. Default is 1m. |
 | `health` says `NO STORAGE BOUND` | `server.js` did not set the bindings — check the service actually started that file. |
 | `ingest key: MISSING` | `server/.env` is unreadable by the `tempest` user, or the key is blank. |

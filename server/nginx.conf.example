@@ -5,11 +5,22 @@
 # and the API, so there is a single upstream and nothing to route.
 #
 #   sudo cp server/nginx.conf.example /etc/nginx/conf.d/tempest.conf
-#   sudo nginx -t && sudo systemctl reload nginx
+#   sudo nginx -t && sudo systemctl enable --now nginx
+#   sudo certbot --nginx -d 43-210-250-181.sslip.io --agree-tos --redirect -m <your-email>
 #
-# Then get a certificate:
-#   sudo certbot --nginx -d 43-210-250-181.sslip.io
-# certbot rewrites this file with the ssl_* lines and the port 80 redirect.
+# ------------------------------------------------------------------
+# There is deliberately only ONE server block, and it is on port 80.
+# ------------------------------------------------------------------
+# certbot --nginx finds the block whose server_name matches, adds the
+# listen 443 and ssl_certificate lines to it, and writes a second block
+# that redirects port 80 to it.
+#
+# Shipping a ready-made 443 block with the certificate lines commented
+# out does NOT work: nginx rejects `listen ... ssl` with no
+# ssl_certificate, so `nginx -t` fails before certbot ever gets to run.
+#
+# So run this as-is, let certbot rewrite it, and do not hand-edit the
+# lines it adds - it has to recognise them again at renewal.
 #
 # ------------------------------------------------------------------
 # server_name CANNOT be a bare IP, and cannot be the EC2 hostname.
@@ -19,14 +30,10 @@
 # public address there is no crypto.subtle, so the site loads and the
 # login silently refuses. HTTPS is required, so a name is required.
 #
-# Use an Elastic IP either way - the ordinary public IP changes when
-# the instance stops, which breaks the plugins and every share link.
-#
-# Then one of:
-#   - a domain you own, A record pointed at the Elastic IP; or
-#   - <ip>.sslip.io, a free wildcard DNS service that resolves straight
-#     to your IP with no signup. Elastic IP 43.210.250.181 becomes
-#     43-210-250-181.sslip.io and certbot issues for it normally.
+# 43-210-250-181.sslip.io is this instance's Elastic IP with dashes.
+# sslip.io resolves it straight back to 43.210.250.181, so there is no
+# DNS to configure and nothing to buy. If the Elastic IP ever changes,
+# this name changes with it and so does everything below.
 #
 # Not the EC2 name: Let's Encrypt blocks amazonaws.com hostnames at
 # AWS's request, so certbot fails on it.
@@ -35,24 +42,9 @@
 server {
     listen 80;
     listen [::]:80;
-    # this instance's Elastic IP, via sslip.io - no DNS to configure
+
+    # this instance's Elastic IP, via sslip.io
     server_name 43-210-250-181.sslip.io;
-
-    # certbot writes its challenge here on renewal
-    location /.well-known/acme-challenge/ { root /var/www/html; }
-
-    location / { return 301 https://$host$request_uri; }
-}
-
-server {
-    listen 443 ssl;
-    listen [::]:443 ssl;
-    http2 on;
-    server_name 43-210-250-181.sslip.io;
-
-    # certbot fills these in
-    # ssl_certificate     /etc/letsencrypt/live/43-210-250-181.sslip.io/fullchain.pem;
-    # ssl_certificate_key /etc/letsencrypt/live/43-210-250-181.sslip.io/privkey.pem;
 
     # A Perspective recording with a full transcript is the largest thing that
     # crosses this proxy. nginx defaults to 1m, which rejects them with a 413

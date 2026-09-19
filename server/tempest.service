@@ -61,7 +61,14 @@ SystemCallErrorNumber=EPERM
 
 # ProtectSystem=strict makes everything read-only, so name the one directory
 # that must not be. If you moved DATA_DIR, change this to match.
-ReadWritePaths=/opt/tempest/server/data
+#
+# The leading "-" means "do not fail the unit if it is missing". It still has
+# to exist for the service to be able to write, and it is gitignored so a fresh
+# clone does not have it - create it once:
+#   sudo -u tempest mkdir -p /opt/tempest/server/data
+# Without that, the process starts and serves, then fails on the first write
+# with EROFS, which is a confusing way to find out.
+ReadWritePaths=-/opt/tempest/server/data
 
 # Logs go to the journal.
 StandardOutput=journal

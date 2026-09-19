@@ -169,6 +169,9 @@ No `npm install` — there are no dependencies.
 ### 4. Configuration
 
 ```bash
+# data/ is gitignored, so a fresh clone has no such directory, and the systemd
+# unit runs with the filesystem read-only. Create it before first start.
+sudo -u tempest mkdir -p server/data
 sudo -u tempest cp server/.env.example server/.env
 sudo -u tempest chmod 600 server/.env
 openssl rand -hex 32    # for INGEST_KEY

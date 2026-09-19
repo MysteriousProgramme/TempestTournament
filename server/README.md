@@ -362,6 +362,13 @@ You want `POST /api/flags 200` and `POST /api/reconcile 200` within a minute or
 so, then `POST /api/recordings 200` as recordings finish. After that they show
 up under **Management** on the site.
 
+## Moving to another instance
+
+Same hostname, same certificate, same ingest key — so the game server plugins
+and every share link carry on working. See [MIGRATE.md](MIGRATE.md). The one
+thing that constrains it: an Elastic IP cannot move between AWS regions, and
+the hostname is derived from the Elastic IP.
+
 ## Updating
 
 ```bash

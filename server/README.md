@@ -203,7 +203,7 @@ Quickest way to tell: `grep iterations staff.js`. If it says 150000, re-set.
 sudo cp server/tempest.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now tempest
-curl -s localhost:8787/health
+curl -s localhost:8791/health
 ```
 
 Expect every line to say it is up:
@@ -231,7 +231,7 @@ In the EC2 console, on this instance's security group, allow inbound:
 answering a request on port 80; if it is closed, issuance fails with a
 connection timeout that looks like a certbot bug and is not.
 
-**Do not open 8787.** Node binds `127.0.0.1`, so it is unreachable from outside
+**Do not open 8791.** Node binds `127.0.0.1`, so it is unreachable from outside
 regardless — but there is no reason to expose it.
 
 ### 7. nginx and TLS

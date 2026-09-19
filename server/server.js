@@ -63,7 +63,7 @@ async function loadEnv() {
 }
 
 const env = await loadEnv();
-const PORT = Number(env.PORT || 8787);
+const PORT = Number(env.PORT || 8791);
 const HOST = env.HOST || "127.0.0.1";
 const DATA_DIR = path.resolve(HERE, env.DATA_DIR || "data");
 /* A recording body is the only thing that can be genuinely large. The Worker
